@@ -236,3 +236,126 @@ body.show-grid::before{
 
 /* Responsive tweak */
 @media (max-width:768px) { .grid { grid-template-columns: repeat(6, 1fr); } }
+
+/* ===== MOBILE LAYOUT (index) ===== */
+@media (max-width: 900px) {
+  /* Global baseline */
+  html, body {
+    background: #000;
+    color: #fff;
+    margin: 5px;
+    font-family: "Times New Roman", serif;
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 12px;
+    letter-spacing: 0.2px;
+    height: 100%;
+    min-height: 100vh;
+  }
+
+  /* Hide desktop layout */
+  header, main, footer {
+    display: none !important;
+  }
+
+  /* Grid setup */
+  .mobile-layout {
+    padding-top: 24px;
+    min-height: calc(100vh - 24px);
+    position: relative;
+  }
+
+  .grid-mobile {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    column-gap: 5px;
+    row-gap: 0;
+  }
+
+  /* Universal reset for tight baseline */
+  .grid-mobile * {
+    margin: 0;
+    padding: 0;
+    line-height: 12px;
+    font-size: 12px;
+    letter-spacing: 0.2px;
+    font-weight: 600;
+  }
+
+  /* Name (centered 1–13) */
+  .m-name {
+    grid-column: 1 / 13;
+    text-align: center;
+    margin-left: -5px;
+    margin-right: -5px;
+  }
+
+  /* Byline (left, 2–13) */
+  .m-byline {
+    grid-column: 2 / 13;
+    text-align: left;
+  }
+
+  /* 16px gap */
+  .m-gap16 {
+    grid-column: 1 / 13;
+    height: 16px;
+  }
+
+  /* Row layout */
+  .row-label {
+    grid-column: 2 / 6;
+    text-align: left;
+  }
+
+  /* Bullets: 6–7, right aligned */
+  .row-bullet {
+    grid-column: 6 / 7;
+    text-align: right;
+  }
+
+  /* Text begins 7–13, right aligned */
+  .row-text {
+    grid-column: 7 / 13;
+    text-align: right;
+  }
+
+  /* Footer grid (fixed to bottom) */
+  .mobile-footer {
+    position: fixed;
+    bottom: 5px;
+    left: 5px;
+    right: 5px;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    column-gap: 5px;
+    align-items: end;
+    padding-bottom: 0;
+  }
+
+  .m-footer-left {
+    grid-column: 2 / 7;
+    text-align: left;
+  }
+
+  .m-footer-right {
+    grid-column: 7 / 13;
+    text-align: left;
+  }
+
+  /* Fades & links */
+  .fade {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  a {
+    color: rgba(255, 255, 255, 0.4);
+    text-decoration: none;
+    transition: color 0.1s ease;
+  }
+
+  a:hover {
+    color: #ff0000;
+  }
+}
+
