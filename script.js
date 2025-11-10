@@ -245,16 +245,39 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /* =============================
-   Force scroll to top on page load or navigation
+   FORCE SCROLL TO TOP ON EVERY PAGE LOAD OR NAVIGATION
    ============================= */
+
+// Disable browser scroll restoration
 if ('scrollRestoration' in history) {
   history.scrollRestoration = 'manual';
 }
 
-window.addEventListener('beforeunload', () => {
-  window.scrollTo(0, 0);
+// Always scroll to top when clicking internal links
+document.addEventListener('click', function (e) {
+  const link = e.target.closest('a');
+  if (!link) return;
+
+  const href = link.getAttribute('href');
+  if (
+    href &&
+    !href.startsWith('http') && // ignore external
+    !href.startsWith('#') &&    // ignore anchors
+    !link.hasAttribute('target') // ignore new-tab links
+  ) {
+    // Scroll to top *immediately* before navigating
+    window.scrollTo(0, 0);
+  }
 });
 
-window.addEventListener('load', () => {
-  setTimeout(() => window.scrollTo(0, 0), 1);
+// Scroll to top after page load — delay ensures it runs after rendering
+window.addEventListener('load', function () {
+  setTimeout(() => window.scrollTo(0, 0), 50);
+});
+
+// Also handle back/forward cache cases
+window.addEventListener('pageshow', function (e) {
+  if (e.persisted) {
+    window.scrollTo(0, 0);
+  }
 });
