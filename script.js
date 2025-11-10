@@ -243,3 +243,5 @@ document.addEventListener("DOMContentLoaded", () => {
     on = !on;
   }, 600); // blink every 600ms
 });
+
+window.addEventListener("pageshow", () => window.scrollTo(0, 0));
