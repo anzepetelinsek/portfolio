@@ -182,5 +182,78 @@
   </footer>
 
   <script src="script.js"></script>
+  <script>
+(function() {
+  const breakpoint = 900; // phones/small tablets
+  let mobileActive = false;
+  let mobileElement = null;
+
+  function activateMobile() {
+    document.querySelectorAll('header, main, footer').forEach(el => el.style.display = 'none');
+
+    mobileElement = document.createElement('div');
+    mobileElement.className = 'mobile-layout';
+    mobileElement.innerHTML = `
+      <div class="grid-mobile">
+        <!-- 1) NAME — centered 1/13, no bottom margin -->
+        <div class="m-name">ANŽE PETELINŠEK</div>
+
+        <!-- 2) BYLINE — left-aligned 2/13 -->
+        <div class="m-byline">Please view this page on desktop devices as I contemplate mobile type-setting.</div>
+
+        <!-- 3) 16px GAP -->
+        <div class="m-gap16" aria-hidden="true"></div>
+
+        <!-- 4) ROWS (label 2-6, bullet 6-7, text 7-13) -->
+
+        <!-- Currently / a. -->
+        <div class="row-label">Currently</div>
+        <div class="row-bullet">a.</div>
+        <div class="row-text">Graphic Design at <span class="fade">Studio Airport</span></div>
+
+        <!-- Currently / b. -->
+        <div class="row-label"></div>
+        <div class="row-bullet">b.</div>
+        <div class="row-text">Art Direction at <span class="fade">Cafaberry</span></div>
+
+        <!-- 16px GAP -->
+        <div class="m-gap16" aria-hidden="true"></div>
+
+        <!-- Contact / a. -->
+        <div class="row-label">Contact</div>
+        <div class="row-bullet">a.</div>
+        <div class="row-text"><a href="mailto:info@anzepetelinsek.com">Email</a></div>
+
+        <!-- Contact / b. -->
+        <div class="row-label"></div>
+        <div class="row-bullet">b.</div>
+        <div class="row-text"><a href="https://www.instagram.com/anzepetelinsek/" target="_blank">Instagram</a></div>
+
+        <!-- 16px GAP -->
+        <div class="m-gap16" aria-hidden="true"></div>
+
+        <!-- Footer line -->
+        <div class="m-footer-left">Last Updated: November 9, 2025.</div>
+      </div>
+    `;
+    document.body.appendChild(mobileElement);
+    mobileActive = true;
+  }
+
+  function deactivateMobile() {
+    document.querySelectorAll('header, main, footer').forEach(el => el.style.display = '');
+    if (mobileElement) { mobileElement.remove(); mobileElement = null; }
+    mobileActive = false;
+  }
+
+  function checkWidth() {
+    if (window.innerWidth <= breakpoint && !mobileActive) activateMobile();
+    else if (window.innerWidth > breakpoint && mobileActive) deactivateMobile();
+  }
+
+  checkWidth();
+  window.addEventListener('resize', checkWidth);
+})();
+</script>
 </body>
 </html>
