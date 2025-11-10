@@ -244,4 +244,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 600); // blink every 600ms
 });
 
-window.addEventListener("pageshow", () => window.scrollTo(0, 0));
+/* =============================
+   Force scroll to top on page load or navigation
+   ============================= */
+if ('scrollRestoration' in history) {
+  history.scrollRestoration = 'manual';
+}
+
+window.addEventListener('beforeunload', () => {
+  window.scrollTo(0, 0);
+});
+
+window.addEventListener('load', () => {
+  setTimeout(() => window.scrollTo(0, 0), 1);
+});
