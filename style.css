@@ -334,7 +334,7 @@ body.show-grid::before{
   }
 
   .m-footer-left {
-    grid-column: 2 / 7;
+    grid-column: 2 / 13;
     text-align: left;
   }
 
