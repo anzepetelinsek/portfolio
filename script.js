@@ -54,7 +54,6 @@ function runTopbarAnimation(callback) {
 }
 
 function showTopbarInstantly() {
-  document.body.classList.add("instant-topbar");
   document.querySelectorAll(".topbar .col").forEach(el => el.style.opacity = "1");
 }
 
@@ -68,27 +67,22 @@ function startIndexAnimations() {
 
   // Lazy load
   initLazyLoad();
-  // Clickable links on images
   initImageLinks();
-  // Enable caption hovers
-  document.querySelectorAll(".image-wrapper").forEach(w => w.classList.add("ready"));
 
-  const main = document.querySelector("main");
-  if (main) main.classList.remove("content-loading");
+  document.querySelectorAll(".image-wrapper").forEach(w => w.classList.add("ready"));
 }
 
 function startInfoAnimations() {
-  // Staggered reveal (hard-cut via visibility)
   const reveals = document.querySelectorAll(".reveal");
   reveals.forEach((el, i) => setTimeout(() => el.classList.add("visible"), i * 150));
 
-  // Hover focus effect (left/right)
   const setSideHover = (side) => {
     const b = document.body;
     if (side === "left") { b.classList.add("focus-left"); b.classList.remove("focus-right"); }
     else if (side === "right") { b.classList.add("focus-right"); b.classList.remove("focus-left"); }
   };
   const clearSideHover = () => document.body.classList.remove("focus-left","focus-right");
+
   document.querySelectorAll('[data-side="left"]').forEach(el=>{
     el.addEventListener('mouseenter',()=>setSideHover('left'));
     el.addEventListener('mouseleave',clearSideHover);
@@ -127,104 +121,18 @@ function initImageLinks(){
   });
 }
 
-/* ========= Grid overlay toggle ========= */
-document.addEventListener('keydown', e=>{
-  if(e.key.toLowerCase()==='g') document.body.classList.toggle('show-grid');
-});
-
-/* ========= Bind internal navigation (persist header) ========= */
-function bindInternalLinks(scope = document) {
-  scope.querySelectorAll('a[href]').forEach(link => {
-    const href = link.getAttribute('href');
-    if (!href) return;
-
-    // Skip external, mailto, hash, and target=_blank
-    if (href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('#') || link.target === '_blank') return;
-
-    link.addEventListener('click', e => {
-      e.preventDefault();
-      navigateTo(href);
-    });
-  });
-}
-
-/* ========= Smooth internal page swap (prevents flicker) ========= */
-function navigateTo(href, { replace = false } = {}) {
-  const absolute = new URL(href, window.location.href).href;
-
-  // Hide content during transition
-  document.body.classList.add('transitioning');
-
-  fetch(absolute, { credentials: 'same-origin' })
-    .then(res => res.text())
-    .then(html => {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-
-      const newMain = doc.querySelector('main');
-      const newFooter = doc.querySelector('footer');
-      const newTitle = doc.querySelector('title')?.textContent || document.title;
-      const newBodyClass = doc.body.className;
-
-      if (newMain && newFooter) {
-        document.querySelector('main').replaceWith(newMain);
-        document.querySelector('footer').replaceWith(newFooter);
-
-        // Hide new content until ready
-        newMain.style.opacity = '0';
-        newFooter.style.opacity = '0';
-
-        document.body.className = newBodyClass;
-        showTopbarInstantly();
-        document.title = newTitle;
-
-        if (replace) history.replaceState({}, '', absolute);
-        else history.pushState({}, '', absolute);
-
-        bindInternalLinks(document);
-
-        // Delay to allow DOM ready before animation
-        setTimeout(() => {
-          initPageContent();
-
-          // Reveal new content smoothly
-          newMain.style.opacity = '1';
-          newFooter.style.opacity = '1';
-          document.body.classList.remove('transitioning');
-        }, 150);
-
-      } else {
-        // fallback full reload
-        window.location.href = absolute;
-      }
-    })
-    .catch(() => window.location.href = absolute);
-}
-
-/* ========= Init per page ========= */
-function initPageContent() {
-  const isInfo = document.body.classList.contains("info-page");
-  if (isInfo) startInfoAnimations();
-  else startIndexAnimations();
-}
-
 /* ========= Boot ========= */
 document.addEventListener("DOMContentLoaded", () => {
   if (!hasSeenIntro) {
     runTopbarAnimation(() => {
-      initPageContent();
-      bindInternalLinks(document);
+      if (document.body.classList.contains("info-page")) startInfoAnimations();
+      else startIndexAnimations();
     });
   } else {
     showTopbarInstantly();
-    initPageContent();
-    bindInternalLinks(document);
+    if (document.body.classList.contains("info-page")) startInfoAnimations();
+    else startIndexAnimations();
   }
-
-  // Handle back/forward navigation by swapping content without reload
-  window.addEventListener('popstate', () => {
-    navigateTo(window.location.pathname + window.location.search, { replace: true });
-  });
 
   /* ========= 🔴 Blinking red dot favicon ========= */
   const favicon = document.querySelector("link[rel='icon']") || document.createElement("link");
@@ -252,5 +160,4 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 600);
 });
 
-/* ========= Reset scroll on load ========= */
 window.addEventListener("pageshow", () => window.scrollTo(0, 0));
