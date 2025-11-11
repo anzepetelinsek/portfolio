@@ -54,6 +54,7 @@ function runTopbarAnimation(callback) {
 }
 
 function showTopbarInstantly() {
+  document.body.classList.add("instant-topbar");
   document.querySelectorAll(".topbar .col").forEach(el => el.style.opacity = "1");
 }
 
@@ -67,22 +68,27 @@ function startIndexAnimations() {
 
   // Lazy load
   initLazyLoad();
+  // Clickable links on images
   initImageLinks();
-
+  // Enable caption hovers
   document.querySelectorAll(".image-wrapper").forEach(w => w.classList.add("ready"));
+
+  const main = document.querySelector("main");
+  if (main) main.classList.remove("content-loading");
 }
 
 function startInfoAnimations() {
+  // Staggered reveal (hard-cut via visibility)
   const reveals = document.querySelectorAll(".reveal");
   reveals.forEach((el, i) => setTimeout(() => el.classList.add("visible"), i * 150));
 
+  // Hover focus effect (left/right)
   const setSideHover = (side) => {
     const b = document.body;
     if (side === "left") { b.classList.add("focus-left"); b.classList.remove("focus-right"); }
     else if (side === "right") { b.classList.add("focus-right"); b.classList.remove("focus-left"); }
   };
   const clearSideHover = () => document.body.classList.remove("focus-left","focus-right");
-
   document.querySelectorAll('[data-side="left"]').forEach(el=>{
     el.addEventListener('mouseenter',()=>setSideHover('left'));
     el.addEventListener('mouseleave',clearSideHover);
@@ -121,18 +127,96 @@ function initImageLinks(){
   });
 }
 
+/* ========= Grid overlay toggle ========= */
+document.addEventListener('keydown', e=>{
+  if(e.key.toLowerCase()==='g') document.body.classList.toggle('show-grid');
+});
+
+/* ========= Bind internal navigation (persist header) ========= */
+function bindInternalLinks(scope = document) {
+  scope.querySelectorAll('a[href]').forEach(link => {
+    const href = link.getAttribute('href');
+    if (!href) return;
+
+    // Skip external, mailto, hash, and target=_blank
+    if (href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('#') || link.target === '_blank') return;
+
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      navigateTo(href);
+    });
+  });
+}
+
+function navigateTo(href, { replace = false } = {}) {
+  const absolute = new URL(href, window.location.href).href;
+
+  fetch(absolute, { credentials: 'same-origin' })
+    .then(res => res.text())
+    .then(html => {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+
+      const newMain = doc.querySelector('main');
+      const newFooter = doc.querySelector('footer');
+      const newTitle = doc.querySelector('title')?.textContent || document.title;
+      const newBodyClass = doc.body.className;
+
+      if (newMain && newFooter) {
+        document.querySelector('main').replaceWith(newMain);
+        document.querySelector('footer').replaceWith(newFooter);
+
+        // Update body class (e.g., 'info-page')
+        document.body.className = newBodyClass;
+
+        // Ensure topbar is visible instantly after swaps
+        showTopbarInstantly();
+
+        // Update title
+        document.title = newTitle;
+
+        // Push or replace history
+        if (replace) history.replaceState({}, '', absolute);
+        else history.pushState({}, '', absolute);
+
+        // Rebind internal links in the newly injected content
+        bindInternalLinks(document);
+
+        // Run the correct page animation
+        initPageContent();
+      } else {
+        // In case parsing fails, fall back to hard navigation
+        window.location.href = absolute;
+      }
+    })
+    .catch(() => window.location.href = absolute);
+}
+
+/* ========= Init per page ========= */
+function initPageContent() {
+  const isInfo = document.body.classList.contains("info-page");
+  if (isInfo) startInfoAnimations();
+  else startIndexAnimations();
+}
+
 /* ========= Boot ========= */
 document.addEventListener("DOMContentLoaded", () => {
+  // First-time visit: animate topbar; otherwise show instantly
   if (!hasSeenIntro) {
     runTopbarAnimation(() => {
-      if (document.body.classList.contains("info-page")) startInfoAnimations();
-      else startIndexAnimations();
+      initPageContent();
+      bindInternalLinks(document);
     });
   } else {
     showTopbarInstantly();
-    if (document.body.classList.contains("info-page")) startInfoAnimations();
-    else startIndexAnimations();
+    initPageContent();
+    bindInternalLinks(document);
   }
+
+  // Handle back/forward navigation by swapping content without reload
+  window.addEventListener('popstate', () => {
+    navigateTo(window.location.pathname + window.location.search, { replace: true });
+  });
 
   /* ========= 🔴 Blinking red dot favicon ========= */
   const favicon = document.querySelector("link[rel='icon']") || document.createElement("link");
@@ -157,7 +241,43 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(() => {
     favicon.href = makeIcon(on ? 'red' : '');
     on = !on;
-  }, 600);
+  }, 600); // blink every 600ms
 });
 
-window.addEventListener("pageshow", () => window.scrollTo(0, 0));
+/* =============================
+   FORCE SCROLL TO TOP ON EVERY PAGE LOAD OR NAVIGATION
+   ============================= */
+
+// Disable browser scroll restoration
+if ('scrollRestoration' in history) {
+  history.scrollRestoration = 'manual';
+}
+
+// Always scroll to top when clicking internal links
+document.addEventListener('click', function (e) {
+  const link = e.target.closest('a');
+  if (!link) return;
+
+  const href = link.getAttribute('href');
+  if (
+    href &&
+    !href.startsWith('http') && // ignore external
+    !href.startsWith('#') &&    // ignore anchors
+    !link.hasAttribute('target') // ignore new-tab links
+  ) {
+    // Scroll to top *immediately* before navigating
+    window.scrollTo(0, 0);
+  }
+});
+
+// Scroll to top after page load — delay ensures it runs after rendering
+window.addEventListener('load', function () {
+  setTimeout(() => window.scrollTo(0, 0), 50);
+});
+
+// Also handle back/forward cache cases
+window.addEventListener('pageshow', function (e) {
+  if (e.persisted) {
+    window.scrollTo(0, 0);
+  }
+});
