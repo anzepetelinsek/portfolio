@@ -148,8 +148,12 @@ function bindInternalLinks(scope = document) {
   });
 }
 
+/* ========= Smooth internal page swap (prevents flicker) ========= */
 function navigateTo(href, { replace = false } = {}) {
   const absolute = new URL(href, window.location.href).href;
+
+  // Hide content during transition
+  document.body.classList.add('transitioning');
 
   fetch(absolute, { credentials: 'same-origin' })
     .then(res => res.text())
@@ -166,26 +170,31 @@ function navigateTo(href, { replace = false } = {}) {
         document.querySelector('main').replaceWith(newMain);
         document.querySelector('footer').replaceWith(newFooter);
 
-        // Update body class (e.g., 'info-page')
+        // Hide new content until ready
+        newMain.style.opacity = '0';
+        newFooter.style.opacity = '0';
+
         document.body.className = newBodyClass;
-
-        // Ensure topbar is visible instantly after swaps
         showTopbarInstantly();
-
-        // Update title
         document.title = newTitle;
 
-        // Push or replace history
         if (replace) history.replaceState({}, '', absolute);
         else history.pushState({}, '', absolute);
 
-        // Rebind internal links in the newly injected content
         bindInternalLinks(document);
 
-        // Run the correct page animation
-        initPageContent();
+        // Delay to allow DOM ready before animation
+        setTimeout(() => {
+          initPageContent();
+
+          // Reveal new content smoothly
+          newMain.style.opacity = '1';
+          newFooter.style.opacity = '1';
+          document.body.classList.remove('transitioning');
+        }, 150);
+
       } else {
-        // In case parsing fails, fall back to hard navigation
+        // fallback full reload
         window.location.href = absolute;
       }
     })
@@ -201,7 +210,6 @@ function initPageContent() {
 
 /* ========= Boot ========= */
 document.addEventListener("DOMContentLoaded", () => {
-  // First-time visit: animate topbar; otherwise show instantly
   if (!hasSeenIntro) {
     runTopbarAnimation(() => {
       initPageContent();
@@ -241,43 +249,8 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(() => {
     favicon.href = makeIcon(on ? 'red' : '');
     on = !on;
-  }, 600); // blink every 600ms
+  }, 600);
 });
 
-/* =============================
-   FORCE SCROLL TO TOP ON EVERY PAGE LOAD OR NAVIGATION
-   ============================= */
-
-// Disable browser scroll restoration
-if ('scrollRestoration' in history) {
-  history.scrollRestoration = 'manual';
-}
-
-// Always scroll to top when clicking internal links
-document.addEventListener('click', function (e) {
-  const link = e.target.closest('a');
-  if (!link) return;
-
-  const href = link.getAttribute('href');
-  if (
-    href &&
-    !href.startsWith('http') && // ignore external
-    !href.startsWith('#') &&    // ignore anchors
-    !link.hasAttribute('target') // ignore new-tab links
-  ) {
-    // Scroll to top *immediately* before navigating
-    window.scrollTo(0, 0);
-  }
-});
-
-// Scroll to top after page load — delay ensures it runs after rendering
-window.addEventListener('load', function () {
-  setTimeout(() => window.scrollTo(0, 0), 50);
-});
-
-// Also handle back/forward cache cases
-window.addEventListener('pageshow', function (e) {
-  if (e.persisted) {
-    window.scrollTo(0, 0);
-  }
-});
+/* ========= Reset scroll on load ========= */
+window.addEventListener("pageshow", () => window.scrollTo(0, 0));
