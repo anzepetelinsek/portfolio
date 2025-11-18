@@ -60,11 +60,22 @@ function showTopbarInstantly() {
 
 /* ========= Page-specific animations ========= */
 function startIndexAnimations() {
+
+  /* 🔴 Mark animation phase (lazy images stay hidden) */
+  document.body.classList.add("animating");
+
   // First three images: hard-cut sequence
   const firstImgs = document.querySelectorAll(
     ".image-wrapper.jaka1 .image, .image-wrapper.jaka2 .image, .image-wrapper.jaka3 .image"
   );
-  firstImgs.forEach((img, i) => setTimeout(() => img.classList.add("visible"), i * 150));
+  firstImgs.forEach((img, i) =>
+    setTimeout(() => img.classList.add("visible"), i * 150)
+  );
+
+  /* 🔴 End animation shortly after the last image reveals */
+  setTimeout(() => {
+    document.body.classList.remove("animating");
+  }, 150 * 3 + 50); // 350ms total
 
   // Lazy load
   initLazyLoad();
@@ -99,21 +110,35 @@ function startInfoAnimations() {
   });
 }
 
-/* ========= Lazy Loading ========= */
+/* ========= Lazy Loading (patched) ========= */
 function initLazyLoad(){
-  const lazyImgs = document.querySelectorAll('.image.lazy');
+  const lazyImgs = document.querySelectorAll('.image.lazy, video.lazy');
   if (!lazyImgs.length) return;
+
   const io = new IntersectionObserver((entries)=>{
     entries.forEach(entry=>{
       if(!entry.isIntersecting) return;
+
       const img = entry.target;
       img.classList.add('inview');
+
       const hi = new Image();
       hi.src = img.dataset.src || img.src;
-      hi.onload = ()=>{ img.src = hi.src; img.classList.add('loaded'); };
+
+      hi.onload = () => {
+        img.src = hi.src;
+        img.classList.add("loaded");
+
+        /* 🔴 Prevent showing before 3-image animation */
+        if (!document.body.classList.contains("animating")) {
+          img.style.opacity = "1";
+        }
+      };
+
       io.unobserve(img);
     });
   }, { threshold: 0.12 });
+
   lazyImgs.forEach(i=>io.observe(i));
 }
 
@@ -185,7 +210,6 @@ function navigateTo(href, { replace = false } = {}) {
         // Run the correct page animation
         initPageContent();
       } else {
-        // In case parsing fails, fall back to hard navigation
         window.location.href = absolute;
       }
     })
@@ -241,43 +265,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(() => {
     favicon.href = makeIcon(on ? 'red' : '');
     on = !on;
-  }, 600); // blink every 600ms
+  }, 600);
 });
 
-/* =============================
-   FORCE SCROLL TO TOP ON EVERY PAGE LOAD OR NAVIGATION
-   ============================= */
-
-// Disable browser scroll restoration
-if ('scrollRestoration' in history) {
-  history.scrollRestoration = 'manual';
-}
-
-// Always scroll to top when clicking internal links
-document.addEventListener('click', function (e) {
-  const link = e.target.closest('a');
-  if (!link) return;
-
-  const href = link.getAttribute('href');
-  if (
-    href &&
-    !href.startsWith('http') && // ignore external
-    !href.startsWith('#') &&    // ignore anchors
-    !link.hasAttribute('target') // ignore new-tab links
-  ) {
-    // Scroll to top *immediately* before navigating
-    window.scrollTo(0, 0);
-  }
-});
-
-// Scroll to top after page load — delay ensures it runs after rendering
-window.addEventListener('load', function () {
-  setTimeout(() => window.scrollTo(0, 0), 50);
-});
-
-// Also handle back/forward cache cases
-window.addEventListener('pageshow', function (e) {
-  if (e.persisted) {
-    window.scrollTo(0, 0);
-  }
-});
+window.addEventListener("pageshow", () => window.scrollTo(0, 0));
