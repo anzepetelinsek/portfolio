@@ -75,6 +75,9 @@ function startIndexAnimations() {
 
   const main = document.querySelector("main");
   if (main) main.classList.remove("content-loading");
+
+  /* 🔴 Reveal <main> only after the intro animation has begun */
+  document.querySelector("main").style.opacity = "1";
 }
 
 function startInfoAnimations() {
@@ -164,6 +167,9 @@ function navigateTo(href, { replace = false } = {}) {
         document.querySelector('main').replaceWith(newMain);
         document.querySelector('footer').replaceWith(newFooter);
 
+        /* 🔴 Hide new <main> immediately to prevent flash */
+        newMain.style.opacity = "0";
+
         document.body.className = newBodyClass;
 
         showTopbarInstantly();
@@ -177,7 +183,7 @@ function navigateTo(href, { replace = false } = {}) {
 
         initPageContent();
 
-        /* ✅ ALWAYS RESET SCROLL AFTER SOFT NAVIGATION */
+        /* Ensure scroll resets on internal navigation */
         window.scrollTo(0, 0);
 
       } else {
