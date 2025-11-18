@@ -100,12 +100,12 @@ body.info-page .topbar .info a:hover { color: #ff0000 !important; }
 .image.lazy.inview { opacity: 1; }
 .image.lazy.loaded { filter: blur(0); }
 
-/* 🔴 Prevent lazy images/videos from appearing before main animation */
-.image.lazy,
-video.lazy {
+/* Prevent lazy images from showing before intro finishes */
+body.animating .image.lazy,
+body.animating video.lazy {
   opacity: 0 !important;
 }
-/* Videos */
+
 video.image {
   width: 100%; height: auto; display: block;
   margin: 1px 0; object-fit: cover; opacity: 0;
