@@ -93,12 +93,18 @@ body.info-page .topbar .info a:hover { color: #ff0000 !important; }
 
 /* Lazy blur → sharp for images that should progressively load */
 .image.lazy {
-  opacity: 0; filter: blur(10px);
+  opacity: 0; 
+  filter: blur(10px);
   transition: opacity .35s ease, filter .35s ease;
 }
 .image.lazy.inview { opacity: 1; }
 .image.lazy.loaded { filter: blur(0); }
 
+/* 🔴 Prevent lazy images/videos from appearing before main animation */
+.image.lazy,
+video.lazy {
+  opacity: 0 !important;
+}
 /* Videos */
 video.image {
   width: 100%; height: auto; display: block;
@@ -334,7 +340,7 @@ body.show-grid::before{
   }
 
   .m-footer-left {
-    grid-column: 2 / 13;
+    grid-column: 2 / 10;
     text-align: left;
   }
 
