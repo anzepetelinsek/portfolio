@@ -78,17 +78,16 @@ function startIndexAnimations() {
 }
 
 function startInfoAnimations() {
-  // Staggered reveal (hard-cut via visibility)
   const reveals = document.querySelectorAll(".reveal");
   reveals.forEach((el, i) => setTimeout(() => el.classList.add("visible"), i * 150));
 
-  // Hover focus effect (left/right)
   const setSideHover = (side) => {
     const b = document.body;
     if (side === "left") { b.classList.add("focus-left"); b.classList.remove("focus-right"); }
     else if (side === "right") { b.classList.add("focus-right"); b.classList.remove("focus-left"); }
   };
   const clearSideHover = () => document.body.classList.remove("focus-left","focus-right");
+
   document.querySelectorAll('[data-side="left"]').forEach(el=>{
     el.addEventListener('mouseenter',()=>setSideHover('left'));
     el.addEventListener('mouseleave',clearSideHover);
@@ -138,7 +137,6 @@ function bindInternalLinks(scope = document) {
     const href = link.getAttribute('href');
     if (!href) return;
 
-    // Skip external, mailto, hash, and target=_blank
     if (href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('#') || link.target === '_blank') return;
 
     link.addEventListener('click', e => {
@@ -166,26 +164,23 @@ function navigateTo(href, { replace = false } = {}) {
         document.querySelector('main').replaceWith(newMain);
         document.querySelector('footer').replaceWith(newFooter);
 
-        // Update body class (e.g., 'info-page')
         document.body.className = newBodyClass;
 
-        // Ensure topbar is visible instantly after swaps
         showTopbarInstantly();
 
-        // Update title
         document.title = newTitle;
 
-        // Push or replace history
         if (replace) history.replaceState({}, '', absolute);
         else history.pushState({}, '', absolute);
 
-        // Rebind internal links in the newly injected content
         bindInternalLinks(document);
 
-        // Run the correct page animation
         initPageContent();
+
+        /* ✅ ALWAYS RESET SCROLL AFTER SOFT NAVIGATION */
+        window.scrollTo(0, 0);
+
       } else {
-        // In case parsing fails, fall back to hard navigation
         window.location.href = absolute;
       }
     })
@@ -201,7 +196,6 @@ function initPageContent() {
 
 /* ========= Boot ========= */
 document.addEventListener("DOMContentLoaded", () => {
-  // First-time visit: animate topbar; otherwise show instantly
   if (!hasSeenIntro) {
     runTopbarAnimation(() => {
       initPageContent();
@@ -213,7 +207,6 @@ document.addEventListener("DOMContentLoaded", () => {
     bindInternalLinks(document);
   }
 
-  // Handle back/forward navigation by swapping content without reload
   window.addEventListener('popstate', () => {
     navigateTo(window.location.pathname + window.location.search, { replace: true });
   });
@@ -241,7 +234,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(() => {
     favicon.href = makeIcon(on ? 'red' : '');
     on = !on;
-  }, 600); // blink every 600ms
+  }, 600);
 });
 
 window.addEventListener("pageshow", () => window.scrollTo(0, 0));
