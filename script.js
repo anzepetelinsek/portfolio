@@ -64,88 +64,114 @@ function startIndexAnimations() {
   const firstImgs = document.querySelectorAll(
     ".image-wrapper.jaka1 .image, .image-wrapper.jaka2 .image, .image-wrapper.jaka3 .image"
   );
-  firstImgs.forEach((img, i) => setTimeout(() => img.classList.add("visible"), i * 150));
+  firstImgs.forEach((img, i) =>
+    setTimeout(() => img.classList.add("visible"), i * 150)
+  );
 
-  // Lazy load
   initLazyLoad();
-  // Clickable links on images
   initImageLinks();
-  // Enable caption hovers
-  document.querySelectorAll(".image-wrapper").forEach(w => w.classList.add("ready"));
+
+  document.querySelectorAll(".image-wrapper").forEach(w =>
+    w.classList.add("ready")
+  );
 
   const main = document.querySelector("main");
   if (main) main.classList.remove("content-loading");
 
-  /* 🔴 Reveal <main> after intro animation begins */
+  /* Reveal <main> */
   document.querySelector("main").style.opacity = "1";
 }
 
 function startInfoAnimations() {
   const reveals = document.querySelectorAll(".reveal");
-  reveals.forEach((el, i) => setTimeout(() => el.classList.add("visible"), i * 150));
+  reveals.forEach((el, i) =>
+    setTimeout(() => el.classList.add("visible"), i * 150)
+  );
 
   const setSideHover = (side) => {
     const b = document.body;
-    if (side === "left") { b.classList.add("focus-left"); b.classList.remove("focus-right"); }
-    else if (side === "right") { b.classList.add("focus-right"); b.classList.remove("focus-left"); }
+    if (side === "left") {
+      b.classList.add("focus-left");
+      b.classList.remove("focus-right");
+    } else if (side === "right") {
+      b.classList.add("focus-right");
+      b.classList.remove("focus-left");
+    }
   };
-  const clearSideHover = () => document.body.classList.remove("focus-left","focus-right");
+  const clearSideHover = () =>
+    document.body.classList.remove("focus-left", "focus-right");
 
-  document.querySelectorAll('[data-side="left"]').forEach(el=>{
-    el.addEventListener('mouseenter',()=>setSideHover('left'));
-    el.addEventListener('mouseleave',clearSideHover);
+  document.querySelectorAll('[data-side="left"]').forEach(el => {
+    el.addEventListener("mouseenter", () => setSideHover("left"));
+    el.addEventListener("mouseleave", clearSideHover);
   });
-  document.querySelectorAll('[data-side="right"]').forEach(el=>{
-    el.addEventListener('mouseenter',()=>setSideHover('right'));
-    el.addEventListener('mouseleave',clearSideHover);
+  document.querySelectorAll('[data-side="right"]').forEach(el => {
+    el.addEventListener("mouseenter", () => setSideHover("right"));
+    el.addEventListener("mouseleave", clearSideHover);
   });
 
-  /* 🔴 Reveal <main> for Info page */
+  /* Reveal <main> now that stagger is scheduled */
   document.querySelector("main").style.opacity = "1";
 }
 
 /* ========= Lazy Loading ========= */
-function initLazyLoad(){
-  const lazyImgs = document.querySelectorAll('.image.lazy');
+function initLazyLoad() {
+  const lazyImgs = document.querySelectorAll(".image.lazy");
   if (!lazyImgs.length) return;
-  const io = new IntersectionObserver((entries)=>{
-    entries.forEach(entry=>{
-      if(!entry.isIntersecting) return;
-      const img = entry.target;
-      img.classList.add('inview');
-      const hi = new Image();
-      hi.src = img.dataset.src || img.src;
-      hi.onload = ()=>{ img.src = hi.src; img.classList.add('loaded'); };
-      io.unobserve(img);
-    });
-  }, { threshold: 0.12 });
-  lazyImgs.forEach(i=>io.observe(i));
+
+  const io = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const img = entry.target;
+        img.classList.add("inview");
+        const hi = new Image();
+        hi.src = img.dataset.src || img.src;
+        hi.onload = () => {
+          img.src = hi.src;
+          img.classList.add("loaded");
+        };
+        io.unobserve(img);
+      });
+    },
+    { threshold: 0.12 }
+  );
+
+  lazyImgs.forEach((i) => io.observe(i));
 }
 
 /* ========= Clickable Images ========= */
-function initImageLinks(){
-  document.querySelectorAll('.image').forEach(img=>{
-    if(img.dataset && img.dataset.link){
-      img.style.cursor = 'alias';
-      img.addEventListener('click',()=>window.open(img.dataset.link,'_blank'));
+function initImageLinks() {
+  document.querySelectorAll(".image").forEach((img) => {
+    if (img.dataset && img.dataset.link) {
+      img.style.cursor = "alias";
+      img.addEventListener("click", () =>
+        window.open(img.dataset.link, "_blank")
+      );
     }
   });
 }
 
 /* ========= Grid overlay toggle ========= */
-document.addEventListener('keydown', e=>{
-  if(e.key.toLowerCase()==='g') document.body.classList.toggle('show-grid');
+document.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "g") document.body.classList.toggle("show-grid");
 });
 
 /* ========= Bind internal navigation ========= */
 function bindInternalLinks(scope = document) {
-  scope.querySelectorAll('a[href]').forEach(link => {
-    const href = link.getAttribute('href');
+  scope.querySelectorAll("a[href]").forEach((link) => {
+    const href = link.getAttribute("href");
     if (!href) return;
 
-    if (href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('#') || link.target === '_blank') return;
+    if (
+      href.startsWith("http") ||
+      href.startsWith("mailto:") ||
+      href.startsWith("#") ||
+      link.target === "_blank"
+    )
+      return;
 
-    link.addEventListener('click', e => {
+    link.addEventListener("click", (e) => {
       e.preventDefault();
       navigateTo(href);
     });
@@ -156,27 +182,30 @@ function bindInternalLinks(scope = document) {
 function navigateTo(href, { replace = false } = {}) {
   const absolute = new URL(href, window.location.href).href;
 
-  fetch(absolute, { credentials: 'same-origin' })
-    .then(res => res.text())
-    .then(html => {
+  fetch(absolute, { credentials: "same-origin" })
+    .then((res) => res.text())
+    .then((html) => {
       const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
+      const doc = parser.parseFromString(html, "text/html");
 
-      const newMain = doc.querySelector('main');
-      const newFooter = doc.querySelector('footer');
-      const newTitle = doc.querySelector('title')?.textContent || document.title;
+      const newMain = doc.querySelector("main");
+      const newFooter = doc.querySelector("footer");
+      const newTitle =
+        doc.querySelector("title")?.textContent || document.title;
       const newBodyClass = doc.body.className;
 
       if (newMain && newFooter) {
+        /* Replace the nodes */
+        document.querySelector("main").replaceWith(newMain);
+        document.querySelector("footer").replaceWith(newFooter);
 
-        /* Insert cloned nodes */
-        document.querySelector('main').replaceWith(newMain);
-        document.querySelector('footer').replaceWith(newFooter);
+        /* 🔴 reselect the REAL inserted <main> (replaceWith clones) */
+        const insertedMain = document.querySelector("main");
 
-        /* 🔴 IMPORTANT: re-select the REAL inserted <main> (replaceWith clones) */
-        const insertedMain = document.querySelector('main');
+        /* 🔴 force browser reflow BEFORE hiding it */
+        void insertedMain.offsetHeight;
 
-        /* 🔴 Prevent flash: hide real <main> immediately */
+        /* 🔴 hide it (no flash) */
         insertedMain.style.opacity = "0";
 
         document.body.className = newBodyClass;
@@ -184,20 +213,19 @@ function navigateTo(href, { replace = false } = {}) {
         showTopbarInstantly();
         document.title = newTitle;
 
-        if (replace) history.replaceState({}, '', absolute);
-        else history.pushState({}, '', absolute);
+        if (replace) history.replaceState({}, "", absolute);
+        else history.pushState({}, "", absolute);
 
         bindInternalLinks(document);
         initPageContent();
 
-        /* 🔴 Reset scroll for SPA navigation */
+        /* Reset scroll */
         window.scrollTo(0, 0);
-
       } else {
         window.location.href = absolute;
       }
     })
-    .catch(() => window.location.href = absolute);
+    .catch(() => (window.location.href = absolute));
 }
 
 /* ========= Init per page ========= */
@@ -220,32 +248,36 @@ document.addEventListener("DOMContentLoaded", () => {
     bindInternalLinks(document);
   }
 
-  window.addEventListener('popstate', () => {
-    navigateTo(window.location.pathname + window.location.search, { replace: true });
+  window.addEventListener("popstate", () => {
+    navigateTo(window.location.pathname + window.location.search, {
+      replace: true,
+    });
   });
 
   /* ========= Blinking dot favicon ========= */
-  const favicon = document.querySelector("link[rel='icon']") || document.createElement("link");
+  const favicon =
+    document.querySelector("link[rel='icon']") ||
+    document.createElement("link");
   favicon.rel = "icon";
   document.head.appendChild(favicon);
 
   function makeIcon(color) {
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = 32;
     canvas.height = 32;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (color) {
       ctx.beginPath();
       ctx.arc(16, 16, 6, 0, 2 * Math.PI);
       ctx.fillStyle = color;
       ctx.fill();
     }
-    return canvas.toDataURL('image/png');
+    return canvas.toDataURL("image/png");
   }
 
   let on = false;
   setInterval(() => {
-    favicon.href = makeIcon(on ? 'red' : '');
+    favicon.href = makeIcon(on ? "red" : "");
     on = !on;
   }, 600);
 });
