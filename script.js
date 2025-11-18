@@ -76,7 +76,7 @@ function startIndexAnimations() {
   const main = document.querySelector("main");
   if (main) main.classList.remove("content-loading");
 
-  /* 🔴 Reveal <main> only after the intro animation has begun */
+  /* 🔴 Reveal <main> after intro animation begins */
   document.querySelector("main").style.opacity = "1";
 }
 
@@ -100,7 +100,7 @@ function startInfoAnimations() {
     el.addEventListener('mouseleave',clearSideHover);
   });
 
-  /* 🔴 Ensure the Info page <main> becomes visible */
+  /* 🔴 Reveal <main> for Info page */
   document.querySelector("main").style.opacity = "1";
 }
 
@@ -137,7 +137,7 @@ document.addEventListener('keydown', e=>{
   if(e.key.toLowerCase()==='g') document.body.classList.toggle('show-grid');
 });
 
-/* ========= Bind internal navigation (persist header) ========= */
+/* ========= Bind internal navigation ========= */
 function bindInternalLinks(scope = document) {
   scope.querySelectorAll('a[href]').forEach(link => {
     const href = link.getAttribute('href');
@@ -152,7 +152,7 @@ function bindInternalLinks(scope = document) {
   });
 }
 
-/* ========= Soft navigation + SPA behaviour ========= */
+/* ========= Soft navigation ========= */
 function navigateTo(href, { replace = false } = {}) {
   const absolute = new URL(href, window.location.href).href;
 
@@ -168,26 +168,29 @@ function navigateTo(href, { replace = false } = {}) {
       const newBodyClass = doc.body.className;
 
       if (newMain && newFooter) {
+
+        /* Insert cloned nodes */
         document.querySelector('main').replaceWith(newMain);
         document.querySelector('footer').replaceWith(newFooter);
 
-        /* 🔴 Hide new <main> immediately to prevent flash */
-        newMain.style.opacity = "0";
+        /* 🔴 IMPORTANT: re-select the REAL inserted <main> (replaceWith clones) */
+        const insertedMain = document.querySelector('main');
+
+        /* 🔴 Prevent flash: hide real <main> immediately */
+        insertedMain.style.opacity = "0";
 
         document.body.className = newBodyClass;
 
         showTopbarInstantly();
-
         document.title = newTitle;
 
         if (replace) history.replaceState({}, '', absolute);
         else history.pushState({}, '', absolute);
 
         bindInternalLinks(document);
-
         initPageContent();
 
-        /* 🔴 Ensure scroll resets on internal navigation */
+        /* 🔴 Reset scroll for SPA navigation */
         window.scrollTo(0, 0);
 
       } else {
@@ -221,7 +224,7 @@ document.addEventListener("DOMContentLoaded", () => {
     navigateTo(window.location.pathname + window.location.search, { replace: true });
   });
 
-  /* ========= 🔴 Blinking red dot favicon ========= */
+  /* ========= Blinking dot favicon ========= */
   const favicon = document.querySelector("link[rel='icon']") || document.createElement("link");
   favicon.rel = "icon";
   document.head.appendChild(favicon);
