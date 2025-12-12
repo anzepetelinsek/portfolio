@@ -9,16 +9,19 @@ function runTopbarAnimation(callback) {
     if (callback) callback();
     return;
   }
+
   const states = ["", ".", "..", "..."];
   let index = 0, loops = 0;
 
   nameEl.style.opacity = "1";
   ellipsis.style.opacity = "1";
 
+  /* dot speed intentionally unchanged */
   const interval = setInterval(() => {
     ellipsis.textContent = states[index];
     index = (index + 1) % states.length;
     if (index === 0) loops++;
+
     if (loops >= 2) {
       clearInterval(interval);
       ellipsis.textContent = "...";
@@ -34,14 +37,18 @@ function runTopbarAnimation(callback) {
           ".contact-label",
           ".contact-links",
         ];
+
+        /* ⬇️ faster cascade (was 135ms) */
         topbarEls.forEach((sel, i) => {
           setTimeout(() => {
             const el = document.querySelector(sel);
             if (el) el.style.opacity = "1";
-          }, i * 135);
+          }, i * 100);
         });
 
-        const afterMs = topbarEls.length * 135 + 250;
+        /* ⬇️ adjusted completion timing */
+        const afterMs = topbarEls.length * 100 + 250;
+
         setTimeout(() => {
           sessionStorage.setItem("hasSeenIntro", "true");
           if (callback) callback();
@@ -59,12 +66,12 @@ function showTopbarInstantly() {
 
 /* ========= Page-specific animations ========= */
 function startIndexAnimations() {
-  // Fade-in of first 3 images
+  /* ⬇️ faster image stagger (was 150ms) */
   const firstImgs = document.querySelectorAll(
     ".image-wrapper.jaka1 .image, .image-wrapper.jaka2 .image, .image-wrapper.jaka3 .image"
   );
   firstImgs.forEach((img, i) =>
-    setTimeout(() => img.classList.add("visible"), i * 150)
+    setTimeout(() => img.classList.add("visible"), i * 112)
   );
 
   initLazyLoad();
@@ -78,9 +85,10 @@ function startIndexAnimations() {
 }
 
 function startInfoAnimations() {
+  /* ⬇️ faster reveal stagger (was 150ms) */
   const reveals = document.querySelectorAll(".reveal");
   reveals.forEach((el, i) =>
-    setTimeout(() => el.classList.add("visible"), i * 150)
+    setTimeout(() => el.classList.add("visible"), i * 112)
   );
 
   const setSideHover = (side) => {
@@ -189,36 +197,31 @@ function navigateTo(href, { replace = false } = {}) {
       const newBodyClass = doc.body.className;
 
       if (newMain && newFooter) {
-        /* Replace main + footer */
         document.querySelector("main").replaceWith(newMain);
         document.querySelector("footer").replaceWith(newFooter);
 
-        /* ALWAYS force them hidden immediately */
         const insertedMain = document.querySelector("main");
         const insertedFooter = document.querySelector("footer");
+
         insertedMain.style.opacity = "0";
         insertedMain.classList.add("content-loading");
         insertedFooter.style.opacity = "0";
 
-        /* Update body class and title */
         document.body.className = newBodyClass;
         document.title = newTitle;
 
-        /* Update history */
         if (replace) history.replaceState({}, "", absolute);
         else history.pushState({}, "", absolute);
 
         bindInternalLinks(document);
-
-        /* Initialize animations but DO NOT reveal immediately */
         initPageContent();
 
-        /* Reveal both main + footer once everything is attached */
+        /* ⬇️ faster micro reveal (was 60ms) */
         setTimeout(() => {
           insertedMain.style.opacity = "1";
           insertedMain.classList.remove("content-loading");
           insertedFooter.style.opacity = "1";
-        }, 60);
+        }, 45);
 
         window.scrollTo(0, 0);
       } else {
