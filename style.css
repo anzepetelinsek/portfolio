@@ -78,7 +78,7 @@ a:hover { color: #ff0000; }
 .name a { color: #000; }
 .name a:hover { color: #ff0000; }
 
-/* Info page link override (only the Info link in topbar) */
+/* Info page link override */
 body.info-page .topbar .info a { color: #000 !important; }
 body.info-page .topbar .info a:hover { color: #ff0000 !important; }
 
@@ -87,11 +87,11 @@ body.info-page .topbar .info a:hover { color: #ff0000 !important; }
 
 .image {
   width: 100%; height: auto; display: block; object-fit: cover;
-  margin: 1px 0; opacity: 0; transition: none; /* hard-cut when class 'visible' is added */
+  margin: 1px 0; opacity: 0; transition: none;
 }
 .image.visible { opacity: 1; }
 
-/* Lazy blur → sharp for images that should progressively load */
+/* Lazy blur → sharp */
 .image.lazy {
   opacity: 0; filter: blur(10px);
   transition: opacity .35s ease, filter .35s ease;
@@ -107,7 +107,7 @@ video.image {
 }
 video.image.visible { opacity: 1; }
 
-/* Grid placement (kept from your original) */
+/* Grid placement */
 .image-wrapper.jaka1 { grid-column: 2/5;  }
 .image-wrapper.jaka2 { grid-column: 10/13;  }
 .image-wrapper.jaka3 { grid-column: 2/8; }
@@ -146,12 +146,12 @@ video.image.visible { opacity: 1; }
 .reveal { visibility: hidden; }
 .reveal.visible { visibility: visible; }
 
-/* Subtle cross-fade when hovering left/right content areas */
+/* Left/right hover fading */
 .fade-target { opacity: 0.25; transition: opacity 0.3s ease; }
-body.focus-left .fade-left { opacity: 1; transition: opacity 0.25s ease; }
-body.focus-left .fade-right { opacity: 0.15; transition: opacity 0.25s ease; }
-body.focus-right .fade-right { opacity: 1; transition: opacity 0.25s ease; }
-body.focus-right .fade-left { opacity: 0.15; transition: opacity 0.25s ease; }
+body.focus-left .fade-left { opacity: 1; }
+body.focus-left .fade-right { opacity: 0.15; }
+body.focus-right .fade-right { opacity: 1; }
+body.focus-right .fade-left { opacity: 0.15; }
 .quote-wrap .quote { opacity: 1; }
 
 main { padding-top: calc(1.4vw + 10px); }
@@ -184,7 +184,7 @@ main { padding-top: calc(1.4vw + 10px); }
 .practice p{margin:0;font-size:.98vw;line-height:.98vw;letter-spacing:.2px}
 .practice-wrap{margin-top:15px}
 
-/* Projects */
+/* ===== Projects ===== */
 .projects-title{margin-top:23px}
 .projects-list{
   font-size:.7vw;line-height:.7vw;letter-spacing:.2px;font-weight:600;margin:0;
@@ -197,7 +197,42 @@ main { padding-top: calc(1.4vw + 10px); }
 .projects-list a{color:#000;text-decoration:none;transition:color .1s ease}
 .projects-list a:hover{color:#ff0000}
 
-/* Work & Education */
+/* One-line fading title swap */
+.projects-title {
+  margin-top: 23px;
+  margin-bottom: .7vw;
+  font-size: .99vw;
+  line-height: .99vw;
+  letter-spacing: .2px;
+  font-weight: 600;
+  white-space: nowrap;
+  position: relative;
+}
+
+/* Both spans sit inline, but the long one is invisible initially */
+.projects-title .short,
+.projects-title .long {
+  transition: opacity 0.3s ease;
+}
+
+.projects-title .long {
+  opacity: 0;
+  position: absolute; 
+  left: 0;
+  top: 0;
+}
+
+/* Hover swap */
+.projects-block:hover .projects-title .short {
+  opacity: 0;
+}
+
+.projects-block:hover .projects-title .long {
+  opacity: 1;
+}
+
+
+/* ===== Work & Education ===== */
 .work-wrap{grid-column:8/13;margin-top:23px}
 .education-wrap{grid-column:2/7;margin-top:-57px !important;}
 .work-title{margin:0 0 .99vw 0;font-size:.99vw;line-height:.99vw;letter-spacing:.2px}
@@ -220,11 +255,11 @@ footer { margin-top: 25px; margin-bottom: 5px; }
 .footer-right { grid-column: 3/4; text-align: left; color: rgba(0,0,0,0.4); cursor: pointer; transition: color .2s ease; }
 .footer-right:hover { color: #ff0000; }
 
-/* ===== Instant Topbar (no flicker on subsequent pages) ===== */
+/* ===== Instant Topbar ===== */
 body.instant-topbar .topbar .col { opacity: 1 !important; transition: none !important; }
 body.instant-topbar .ellipsis { display: none !important; }
 
-/* Grid overlay toggle */
+/* ===== Grid overlay toggle ===== */
 body.show-grid::before{
   content:"";position:fixed;inset:0 5px 0 5px;pointer-events:none;z-index:9999;
   background-image:repeating-linear-gradient(to right,
@@ -239,7 +274,6 @@ body.show-grid::before{
 
 /* ===== MOBILE LAYOUT (index) ===== */
 @media (max-width: 900px) {
-  /* Global baseline */
   html, body {
     background: #000;
     color: #fff;
@@ -253,12 +287,10 @@ body.show-grid::before{
     min-height: 100vh;
   }
 
-  /* Hide desktop layout */
   header, main, footer {
     display: none !important;
   }
 
-  /* Grid setup */
   .mobile-layout {
     padding-top: 24px;
     min-height: calc(100vh - 24px);
@@ -272,7 +304,6 @@ body.show-grid::before{
     row-gap: 0;
   }
 
-  /* Universal reset for tight baseline */
   .grid-mobile * {
     margin: 0;
     padding: 0;
@@ -282,7 +313,6 @@ body.show-grid::before{
     font-weight: 600;
   }
 
-  /* Name (centered 1–13) */
   .m-name {
     grid-column: 1 / 13;
     text-align: center;
@@ -290,37 +320,31 @@ body.show-grid::before{
     margin-right: -5px;
   }
 
-  /* Byline (left, 2–13) */
   .m-byline {
     grid-column: 2 / 13;
     text-align: left;
   }
 
-  /* 16px gap */
   .m-gap16 {
     grid-column: 1 / 13;
     height: 16px;
   }
 
-  /* Row layout */
   .row-label {
     grid-column: 2 / 6;
     text-align: left;
   }
 
-  /* Bullets: 6–7, right aligned */
   .row-bullet {
     grid-column: 6 / 7;
     text-align: right;
   }
 
-  /* Text begins 7–13, right aligned */
   .row-text {
     grid-column: 7 / 13;
     text-align: right;
   }
 
-  /* Footer grid (fixed to bottom) */
   .mobile-footer {
     position: fixed;
     bottom: 5px;
@@ -343,7 +367,6 @@ body.show-grid::before{
     text-align: left;
   }
 
-  /* Fades & links */
   .fade {
     color: rgba(255, 255, 255, 0.4);
   }
@@ -358,4 +381,3 @@ body.show-grid::before{
     color: #ff0000;
   }
 }
-
