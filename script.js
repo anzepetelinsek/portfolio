@@ -1,7 +1,32 @@
 /* ========= Session-aware topbar intro ========= */
 const hasSeenIntro = sessionStorage.getItem("hasSeenIntro");
 
-/* Full topbar animation: name → dots → rest of topbar */
+/* ========= CODED favicon blink (original-style) ========= */
+function startFaviconBlink() {
+  const favicon = document.querySelector("link[rel='icon']");
+  if (!favicon) return;
+
+  const frames = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+       <rect width="64" height="64" fill="white"/>
+     </svg>`,
+
+    `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+       <rect width="64" height="64" fill="white"/>
+       <text x="32" y="42" font-size="32" text-anchor="middle" fill="black">.</text>
+     </svg>`
+  ];
+
+  let i = 0;
+  setInterval(() => {
+    favicon.href =
+      "data:image/svg+xml;charset=utf-8," +
+      encodeURIComponent(frames[i % frames.length]);
+    i++;
+  }, 250);
+}
+
+/* ========= Topbar animation ========= */
 function runTopbarAnimation(callback) {
   const nameEl = document.querySelector(".name");
   const ellipsis = document.querySelector(".ellipsis");
@@ -20,7 +45,6 @@ function runTopbarAnimation(callback) {
   const interval = setInterval(() => {
     ellipsis.textContent = states[index];
     index = (index + 1) % states.length;
-
     if (index === 0) loops++;
 
     if (loops >= 2) {
@@ -43,7 +67,7 @@ function runTopbarAnimation(callback) {
           setTimeout(() => {
             const el = document.querySelector(sel);
             if (el) el.style.opacity = "1";
-          }, i * 100); // faster cascade
+          }, i * 100); // 25% faster
         });
 
         const afterMs = topbarEls.length * 100 + 250;
@@ -54,69 +78,84 @@ function runTopbarAnimation(callback) {
         }, afterMs);
       }, 150);
     }
-  }, 250); // dot speed unchanged
+  }, 250);
 }
 
 function showTopbarInstantly() {
   document.body.classList.add("instant-topbar");
-  document
-    .querySelectorAll(".topbar .col")
-    .forEach((el) => (el.style.opacity = "1"));
+  document.querySelectorAll(".topbar .col").forEach((el) => {
+    el.style.opacity = "1";
+  });
 }
 
-/* ========= Page-specific animations ========= */
+/* ========= Index page animations ========= */
 function startIndexAnimations() {
-  const images = document.querySelectorAll(".image");
-  const wrappers = document.querySelectorAll(".image-wrapper");
+  const media = document.querySelectorAll(".image");
 
-  /* reset state safely (classes only) */
-  images.forEach((img) => {
-    img.classList.remove("visible", "loaded", "inview");
-  });
+  /* 1) hide everything */
+  media.forEach((el) => el.classList.remove("visible"));
 
-  /* reveal only first three images */
-  const firstImgs = document.querySelectorAll(
+  /* 2) stagger first three */
+  const firstMedia = document.querySelectorAll(
     ".image-wrapper.jaka1 .image, .image-wrapper.jaka2 .image, .image-wrapper.jaka3 .image"
   );
 
-  firstImgs.forEach((img, i) => {
-    setTimeout(() => img.classList.add("visible"), i * 112);
+  const stagger = 112;
+  const total = firstMedia.length * stagger;
+
+  firstMedia.forEach((el, i) => {
+    setTimeout(() => el.classList.add("visible"), i * stagger);
   });
+
+  /* 3) reveal rest AFTER stagger */
+  setTimeout(() => {
+    media.forEach((el) => el.classList.add("visible"));
+  }, total + 20);
 
   initLazyLoad();
   initImageLinks();
 
-  wrappers.forEach((w) => w.classList.add("ready"));
+  document.querySelectorAll(".image-wrapper").forEach((w) =>
+    w.classList.add("ready")
+  );
+
+  document.querySelector("main").style.opacity = "1";
 }
 
+/* ========= Info page animations ========= */
 function startInfoAnimations() {
   const reveals = document.querySelectorAll(".reveal");
-
   reveals.forEach((el, i) => {
     setTimeout(() => el.classList.add("visible"), i * 112);
   });
 
   const setSideHover = (side) => {
-    document.body.classList.toggle("focus-left", side === "left");
-    document.body.classList.toggle("focus-right", side === "right");
+    const b = document.body;
+    if (side === "left") {
+      b.classList.add("focus-left");
+      b.classList.remove("focus-right");
+    } else if (side === "right") {
+      b.classList.add("focus-right");
+      b.classList.remove("focus-left");
+    }
   };
 
-  const clearSideHover = () => {
+  const clearSideHover = () =>
     document.body.classList.remove("focus-left", "focus-right");
-  };
 
   document.querySelectorAll('[data-side="left"]').forEach((el) => {
     el.addEventListener("mouseenter", () => setSideHover("left"));
     el.addEventListener("mouseleave", clearSideHover);
   });
-
   document.querySelectorAll('[data-side="right"]').forEach((el) => {
     el.addEventListener("mouseenter", () => setSideHover("right"));
     el.addEventListener("mouseleave", clearSideHover);
   });
+
+  document.querySelector("main").style.opacity = "1";
 }
 
-/* ========= Lazy Loading ========= */
+/* ========= Lazy loading ========= */
 function initLazyLoad() {
   const lazyImgs = document.querySelectorAll(".image.lazy");
   if (!lazyImgs.length) return;
@@ -125,7 +164,6 @@ function initLazyLoad() {
     (entries) => {
       entries.forEach((entry) => {
         if (!entry.isIntersecting) return;
-
         const img = entry.target;
         img.classList.add("inview");
 
@@ -145,7 +183,7 @@ function initLazyLoad() {
   lazyImgs.forEach((img) => io.observe(img));
 }
 
-/* ========= Clickable Images ========= */
+/* ========= Clickable images ========= */
 function initImageLinks() {
   document.querySelectorAll(".image").forEach((img) => {
     if (img.dataset?.link) {
@@ -162,7 +200,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-/* ========= Bind internal navigation ========= */
+/* ========= Internal navigation ========= */
 function bindInternalLinks(scope = document) {
   scope.querySelectorAll("a[href]").forEach((link) => {
     const href = link.getAttribute("href");
@@ -184,29 +222,22 @@ function bindInternalLinks(scope = document) {
 
 /* ========= Soft navigation ========= */
 function navigateTo(href, { replace = false } = {}) {
-  const absolute = new URL(href, location.href).href;
+  const absolute = new URL(href, window.location.href).href;
 
   fetch(absolute, { credentials: "same-origin" })
-    .then((r) => r.text())
+    .then((res) => res.text())
     .then((html) => {
       const doc = new DOMParser().parseFromString(html, "text/html");
       const newMain = doc.querySelector("main");
       const newFooter = doc.querySelector("footer");
 
       if (!newMain || !newFooter) {
-        location.href = absolute;
+        window.location.href = absolute;
         return;
       }
 
       document.querySelector("main").replaceWith(newMain);
       document.querySelector("footer").replaceWith(newFooter);
-
-      const insertedMain = document.querySelector("main");
-      const insertedFooter = document.querySelector("footer");
-
-      insertedMain.classList.add("content-loading");
-      insertedMain.style.opacity = "0";
-      insertedFooter.style.opacity = "0";
 
       document.body.className = doc.body.className;
       document.title = doc.title;
@@ -218,21 +249,17 @@ function navigateTo(href, { replace = false } = {}) {
       bindInternalLinks(document);
       initPageContent();
 
-      /* wait one paint frame before revealing */
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          insertedMain.style.opacity = "1";
-          insertedMain.classList.remove("content-loading");
-          insertedFooter.style.opacity = "1";
-        }, 45);
-      });
+      setTimeout(() => {
+        document.querySelector("main").style.opacity = "1";
+        document.querySelector("footer").style.opacity = "1";
+      }, 45);
 
-      scrollTo(0, 0);
+      window.scrollTo(0, 0);
     })
-    .catch(() => (location.href = absolute));
+    .catch(() => (window.location.href = absolute));
 }
 
-/* ========= Init per page ========= */
+/* ========= Init ========= */
 function initPageContent() {
   document.body.classList.contains("info-page")
     ? startInfoAnimations()
@@ -241,6 +268,8 @@ function initPageContent() {
 
 /* ========= Boot ========= */
 document.addEventListener("DOMContentLoaded", () => {
+  startFaviconBlink();
+
   if (!hasSeenIntro) {
     runTopbarAnimation(() => {
       initPageContent();
