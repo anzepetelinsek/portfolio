@@ -257,3 +257,41 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 });
+
+/* ========= Blinking red favicon ========= */
+(function () {
+  const SIZE = 32;
+  const BLINK_INTERVAL = 600; // ms — adjust if you want slower/faster
+
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = SIZE;
+  const ctx = canvas.getContext("2d");
+
+  let visible = true;
+
+  let link = document.querySelector("link[rel='icon']");
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "icon";
+    document.head.appendChild(link);
+  }
+
+  function drawDot(show) {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    if (show) {
+      ctx.fillStyle = "#ff0000";
+      ctx.beginPath();
+      ctx.arc(SIZE / 2, SIZE / 2, SIZE / 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    link.href = canvas.toDataURL("image/png");
+  }
+
+  drawDot(true);
+
+  setInterval(() => {
+    visible = !visible;
+    drawDot(visible);
+  }, BLINK_INTERVAL);
+})();
+
