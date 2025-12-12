@@ -6,11 +6,13 @@ function runTopbarAnimation(callback) {
   const nameEl = document.querySelector(".name");
   const ellipsis = document.querySelector(".ellipsis");
   if (!nameEl || !ellipsis) {
-    if (callback) callback();
+    callback && callback();
     return;
   }
+
   const states = ["", ".", "..", "..."];
-  let index = 0, loops = 0;
+  let index = 0;
+  let loops = 0;
 
   nameEl.style.opacity = "1";
   ellipsis.style.opacity = "1";
@@ -18,7 +20,9 @@ function runTopbarAnimation(callback) {
   const interval = setInterval(() => {
     ellipsis.textContent = states[index];
     index = (index + 1) % states.length;
+
     if (index === 0) loops++;
+
     if (loops >= 2) {
       clearInterval(interval);
       ellipsis.textContent = "...";
@@ -34,78 +38,82 @@ function runTopbarAnimation(callback) {
           ".contact-label",
           ".contact-links",
         ];
+
         topbarEls.forEach((sel, i) => {
           setTimeout(() => {
             const el = document.querySelector(sel);
             if (el) el.style.opacity = "1";
-          }, i * 135);
+          }, i * 100); // faster cascade
         });
 
-        const afterMs = topbarEls.length * 135 + 250;
+        const afterMs = topbarEls.length * 100 + 250;
+
         setTimeout(() => {
           sessionStorage.setItem("hasSeenIntro", "true");
-          if (callback) callback();
+          callback && callback();
         }, afterMs);
       }, 150);
     }
-  }, 250);
+  }, 250); // dot speed unchanged
 }
 
 function showTopbarInstantly() {
   document.body.classList.add("instant-topbar");
-  document.querySelectorAll(".topbar .col")
-    .forEach(el => el.style.opacity = "1");
+  document
+    .querySelectorAll(".topbar .col")
+    .forEach((el) => (el.style.opacity = "1"));
 }
 
 /* ========= Page-specific animations ========= */
 function startIndexAnimations() {
-  // Fade-in of first 3 images
+  const images = document.querySelectorAll(".image");
+  const wrappers = document.querySelectorAll(".image-wrapper");
+
+  /* reset state safely (classes only) */
+  images.forEach((img) => {
+    img.classList.remove("visible", "loaded", "inview");
+  });
+
+  /* reveal only first three images */
   const firstImgs = document.querySelectorAll(
     ".image-wrapper.jaka1 .image, .image-wrapper.jaka2 .image, .image-wrapper.jaka3 .image"
   );
-  firstImgs.forEach((img, i) =>
-    setTimeout(() => img.classList.add("visible"), i * 150)
-  );
+
+  firstImgs.forEach((img, i) => {
+    setTimeout(() => img.classList.add("visible"), i * 112);
+  });
 
   initLazyLoad();
   initImageLinks();
 
-  document.querySelectorAll(".image-wrapper").forEach(w =>
-    w.classList.add("ready")
-  );
-
-  document.querySelector("main").style.opacity = "1";
+  wrappers.forEach((w) => w.classList.add("ready"));
 }
 
 function startInfoAnimations() {
   const reveals = document.querySelectorAll(".reveal");
-  reveals.forEach((el, i) =>
-    setTimeout(() => el.classList.add("visible"), i * 150)
-  );
+
+  reveals.forEach((el, i) => {
+    setTimeout(() => el.classList.add("visible"), i * 112);
+  });
 
   const setSideHover = (side) => {
-    const b = document.body;
-    if (side === "left") {
-      b.classList.add("focus-left");
-      b.classList.remove("focus-right");
-    } else if (side === "right") {
-      b.classList.add("focus-right");
-      b.classList.remove("focus-left");
-    }
+    document.body.classList.toggle("focus-left", side === "left");
+    document.body.classList.toggle("focus-right", side === "right");
   };
-  const clearSideHover = () =>
-    document.body.classList.remove("focus-left", "focus-right");
 
-  document.querySelectorAll('[data-side="left"]').forEach(el => {
+  const clearSideHover = () => {
+    document.body.classList.remove("focus-left", "focus-right");
+  };
+
+  document.querySelectorAll('[data-side="left"]').forEach((el) => {
     el.addEventListener("mouseenter", () => setSideHover("left"));
     el.addEventListener("mouseleave", clearSideHover);
   });
-  document.querySelectorAll('[data-side="right"]').forEach(el => {
+
+  document.querySelectorAll('[data-side="right"]').forEach((el) => {
     el.addEventListener("mouseenter", () => setSideHover("right"));
     el.addEventListener("mouseleave", clearSideHover);
   });
-
-  document.querySelector("main").style.opacity = "1";
 }
 
 /* ========= Lazy Loading ========= */
@@ -117,47 +125,49 @@ function initLazyLoad() {
     (entries) => {
       entries.forEach((entry) => {
         if (!entry.isIntersecting) return;
+
         const img = entry.target;
         img.classList.add("inview");
+
         const hi = new Image();
         hi.src = img.dataset.src || img.src;
         hi.onload = () => {
           img.src = hi.src;
           img.classList.add("loaded");
         };
+
         io.unobserve(img);
       });
     },
     { threshold: 0.12 }
   );
 
-  lazyImgs.forEach((i) => io.observe(i));
+  lazyImgs.forEach((img) => io.observe(img));
 }
 
 /* ========= Clickable Images ========= */
 function initImageLinks() {
   document.querySelectorAll(".image").forEach((img) => {
-    if (img.dataset && img.dataset.link) {
+    if (img.dataset?.link) {
       img.style.cursor = "alias";
-      img.addEventListener("click", () =>
-        window.open(img.dataset.link, "_blank")
-      );
+      img.onclick = () => window.open(img.dataset.link, "_blank");
     }
   });
 }
 
 /* ========= Grid overlay toggle ========= */
 document.addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() === "g") document.body.classList.toggle("show-grid");
+  if (e.key.toLowerCase() === "g") {
+    document.body.classList.toggle("show-grid");
+  }
 });
 
 /* ========= Bind internal navigation ========= */
 function bindInternalLinks(scope = document) {
   scope.querySelectorAll("a[href]").forEach((link) => {
     const href = link.getAttribute("href");
-    if (!href) return;
-
     if (
+      !href ||
       href.startsWith("http") ||
       href.startsWith("mailto:") ||
       href.startsWith("#") ||
@@ -165,74 +175,68 @@ function bindInternalLinks(scope = document) {
     )
       return;
 
-    link.addEventListener("click", (e) => {
+    link.onclick = (e) => {
       e.preventDefault();
       navigateTo(href);
-    });
+    };
   });
 }
 
 /* ========= Soft navigation ========= */
 function navigateTo(href, { replace = false } = {}) {
-  const absolute = new URL(href, window.location.href).href;
+  const absolute = new URL(href, location.href).href;
 
   fetch(absolute, { credentials: "same-origin" })
-    .then((res) => res.text())
+    .then((r) => r.text())
     .then((html) => {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, "text/html");
-
+      const doc = new DOMParser().parseFromString(html, "text/html");
       const newMain = doc.querySelector("main");
       const newFooter = doc.querySelector("footer");
-      const newTitle =
-        doc.querySelector("title")?.textContent || document.title;
-      const newBodyClass = doc.body.className;
 
-      if (newMain && newFooter) {
-        /* Replace main + footer */
-        document.querySelector("main").replaceWith(newMain);
-        document.querySelector("footer").replaceWith(newFooter);
+      if (!newMain || !newFooter) {
+        location.href = absolute;
+        return;
+      }
 
-        /* ALWAYS force them hidden immediately */
-        const insertedMain = document.querySelector("main");
-        const insertedFooter = document.querySelector("footer");
-        insertedMain.style.opacity = "0";
-        insertedMain.classList.add("content-loading");
-        insertedFooter.style.opacity = "0";
+      document.querySelector("main").replaceWith(newMain);
+      document.querySelector("footer").replaceWith(newFooter);
 
-        /* Update body class and title */
-        document.body.className = newBodyClass;
-        document.title = newTitle;
+      const insertedMain = document.querySelector("main");
+      const insertedFooter = document.querySelector("footer");
 
-        /* Update history */
-        if (replace) history.replaceState({}, "", absolute);
-        else history.pushState({}, "", absolute);
+      insertedMain.classList.add("content-loading");
+      insertedMain.style.opacity = "0";
+      insertedFooter.style.opacity = "0";
 
-        bindInternalLinks(document);
+      document.body.className = doc.body.className;
+      document.title = doc.title;
 
-        /* Initialize animations but DO NOT reveal immediately */
-        initPageContent();
+      replace
+        ? history.replaceState({}, "", absolute)
+        : history.pushState({}, "", absolute);
 
-        /* Reveal both main + footer once everything is attached */
+      bindInternalLinks(document);
+      initPageContent();
+
+      /* wait one paint frame before revealing */
+      requestAnimationFrame(() => {
         setTimeout(() => {
           insertedMain.style.opacity = "1";
           insertedMain.classList.remove("content-loading");
           insertedFooter.style.opacity = "1";
-        }, 60);
+        }, 45);
+      });
 
-        window.scrollTo(0, 0);
-      } else {
-        window.location.href = absolute;
-      }
+      scrollTo(0, 0);
     })
-    .catch(() => (window.location.href = absolute));
+    .catch(() => (location.href = absolute));
 }
 
 /* ========= Init per page ========= */
 function initPageContent() {
-  const isInfo = document.body.classList.contains("info-page");
-  if (isInfo) startInfoAnimations();
-  else startIndexAnimations();
+  document.body.classList.contains("info-page")
+    ? startInfoAnimations()
+    : startIndexAnimations();
 }
 
 /* ========= Boot ========= */
@@ -249,8 +253,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   window.addEventListener("popstate", () => {
-    navigateTo(window.location.pathname + window.location.search, {
-      replace: true,
-    });
+    navigateTo(location.pathname + location.search, { replace: true });
   });
 });
