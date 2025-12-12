@@ -12,11 +12,9 @@ function runTopbarAnimation(callback) {
   const states = ["", ".", "..", "..."];
   let index = 0, loops = 0;
 
-  // Show name + dots
   nameEl.style.opacity = "1";
   ellipsis.style.opacity = "1";
 
-  // Dot loop twice
   const interval = setInterval(() => {
     ellipsis.textContent = states[index];
     index = (index + 1) % states.length;
@@ -55,12 +53,13 @@ function runTopbarAnimation(callback) {
 
 function showTopbarInstantly() {
   document.body.classList.add("instant-topbar");
-  document.querySelectorAll(".topbar .col").forEach(el => el.style.opacity = "1");
+  document.querySelectorAll(".topbar .col")
+    .forEach(el => el.style.opacity = "1");
 }
 
 /* ========= Page-specific animations ========= */
 function startIndexAnimations() {
-  // First three images: hard-cut sequence
+  // Fade-in of first 3 images
   const firstImgs = document.querySelectorAll(
     ".image-wrapper.jaka1 .image, .image-wrapper.jaka2 .image, .image-wrapper.jaka3 .image"
   );
@@ -75,10 +74,6 @@ function startIndexAnimations() {
     w.classList.add("ready")
   );
 
-  const main = document.querySelector("main");
-  if (main) main.classList.remove("content-loading");
-
-  /* Reveal <main> */
   document.querySelector("main").style.opacity = "1";
 }
 
@@ -110,7 +105,6 @@ function startInfoAnimations() {
     el.addEventListener("mouseleave", clearSideHover);
   });
 
-  /* Reveal <main> now that stagger is scheduled */
   document.querySelector("main").style.opacity = "1";
 }
 
@@ -195,31 +189,37 @@ function navigateTo(href, { replace = false } = {}) {
       const newBodyClass = doc.body.className;
 
       if (newMain && newFooter) {
-        /* Replace the nodes */
+        /* Replace main + footer */
         document.querySelector("main").replaceWith(newMain);
         document.querySelector("footer").replaceWith(newFooter);
 
-        /* 🔴 reselect the REAL inserted <main> (replaceWith clones) */
+        /* ALWAYS force them hidden immediately */
         const insertedMain = document.querySelector("main");
-
-        /* 🔴 force browser reflow BEFORE hiding it */
-        void insertedMain.offsetHeight;
-
-        /* 🔴 hide it (no flash) */
+        const insertedFooter = document.querySelector("footer");
         insertedMain.style.opacity = "0";
+        insertedMain.classList.add("content-loading");
+        insertedFooter.style.opacity = "0";
 
+        /* Update body class and title */
         document.body.className = newBodyClass;
-
-        showTopbarInstantly();
         document.title = newTitle;
 
+        /* Update history */
         if (replace) history.replaceState({}, "", absolute);
         else history.pushState({}, "", absolute);
 
         bindInternalLinks(document);
+
+        /* Initialize animations but DO NOT reveal immediately */
         initPageContent();
 
-        /* Reset scroll */
+        /* Reveal both main + footer once everything is attached */
+        setTimeout(() => {
+          insertedMain.style.opacity = "1";
+          insertedMain.classList.remove("content-loading");
+          insertedFooter.style.opacity = "1";
+        }, 60);
+
         window.scrollTo(0, 0);
       } else {
         window.location.href = absolute;
@@ -253,33 +253,4 @@ document.addEventListener("DOMContentLoaded", () => {
       replace: true,
     });
   });
-
-  /* ========= Blinking dot favicon ========= */
-  const favicon =
-    document.querySelector("link[rel='icon']") ||
-    document.createElement("link");
-  favicon.rel = "icon";
-  document.head.appendChild(favicon);
-
-  function makeIcon(color) {
-    const canvas = document.createElement("canvas");
-    canvas.width = 32;
-    canvas.height = 32;
-    const ctx = canvas.getContext("2d");
-    if (color) {
-      ctx.beginPath();
-      ctx.arc(16, 16, 6, 0, 2 * Math.PI);
-      ctx.fillStyle = color;
-      ctx.fill();
-    }
-    return canvas.toDataURL("image/png");
-  }
-
-  let on = false;
-  setInterval(() => {
-    favicon.href = makeIcon(on ? "red" : "");
-    on = !on;
-  }, 600);
 });
-
-window.addEventListener("pageshow", () => window.scrollTo(0, 0));
