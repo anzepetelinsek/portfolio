@@ -1,43 +1,16 @@
 /* ========= Session-aware topbar intro ========= */
 const hasSeenIntro = sessionStorage.getItem("hasSeenIntro");
 
-/* ========= CODED favicon blink (original-style) ========= */
-function startFaviconBlink() {
-  const favicon = document.querySelector("link[rel='icon']");
-  if (!favicon) return;
-
-  const frames = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
-       <rect width="64" height="64" fill="white"/>
-     </svg>`,
-
-    `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
-       <rect width="64" height="64" fill="white"/>
-       <text x="32" y="42" font-size="32" text-anchor="middle" fill="black">.</text>
-     </svg>`
-  ];
-
-  let i = 0;
-  setInterval(() => {
-    favicon.href =
-      "data:image/svg+xml;charset=utf-8," +
-      encodeURIComponent(frames[i % frames.length]);
-    i++;
-  }, 250);
-}
-
-/* ========= Topbar animation ========= */
+/* Full topbar animation: name → dots → rest of topbar */
 function runTopbarAnimation(callback) {
   const nameEl = document.querySelector(".name");
   const ellipsis = document.querySelector(".ellipsis");
   if (!nameEl || !ellipsis) {
-    callback && callback();
+    if (callback) callback();
     return;
   }
-
   const states = ["", ".", "..", "..."];
-  let index = 0;
-  let loops = 0;
+  let index = 0, loops = 0;
 
   nameEl.style.opacity = "1";
   ellipsis.style.opacity = "1";
@@ -46,7 +19,6 @@ function runTopbarAnimation(callback) {
     ellipsis.textContent = states[index];
     index = (index + 1) % states.length;
     if (index === 0) loops++;
-
     if (loops >= 2) {
       clearInterval(interval);
       ellipsis.textContent = "...";
@@ -62,19 +34,17 @@ function runTopbarAnimation(callback) {
           ".contact-label",
           ".contact-links",
         ];
-
         topbarEls.forEach((sel, i) => {
           setTimeout(() => {
             const el = document.querySelector(sel);
             if (el) el.style.opacity = "1";
-          }, i * 100); // 25% faster
+          }, i * 135);
         });
 
-        const afterMs = topbarEls.length * 100 + 250;
-
+        const afterMs = topbarEls.length * 135 + 250;
         setTimeout(() => {
           sessionStorage.setItem("hasSeenIntro", "true");
-          callback && callback();
+          if (callback) callback();
         }, afterMs);
       }, 150);
     }
@@ -83,51 +53,35 @@ function runTopbarAnimation(callback) {
 
 function showTopbarInstantly() {
   document.body.classList.add("instant-topbar");
-  document.querySelectorAll(".topbar .col").forEach((el) => {
-    el.style.opacity = "1";
-  });
+  document.querySelectorAll(".topbar .col")
+    .forEach(el => el.style.opacity = "1");
 }
 
-/* ========= Index page animations ========= */
+/* ========= Page-specific animations ========= */
 function startIndexAnimations() {
-  const media = document.querySelectorAll(".image");
-
-  /* 1) hide everything */
-  media.forEach((el) => el.classList.remove("visible"));
-
-  /* 2) stagger first three */
-  const firstMedia = document.querySelectorAll(
+  // Fade-in of first 3 images
+  const firstImgs = document.querySelectorAll(
     ".image-wrapper.jaka1 .image, .image-wrapper.jaka2 .image, .image-wrapper.jaka3 .image"
   );
-
-  const stagger = 112;
-  const total = firstMedia.length * stagger;
-
-  firstMedia.forEach((el, i) => {
-    setTimeout(() => el.classList.add("visible"), i * stagger);
-  });
-
-  /* 3) reveal rest AFTER stagger */
-  setTimeout(() => {
-    media.forEach((el) => el.classList.add("visible"));
-  }, total + 20);
+  firstImgs.forEach((img, i) =>
+    setTimeout(() => img.classList.add("visible"), i * 150)
+  );
 
   initLazyLoad();
   initImageLinks();
 
-  document.querySelectorAll(".image-wrapper").forEach((w) =>
+  document.querySelectorAll(".image-wrapper").forEach(w =>
     w.classList.add("ready")
   );
 
   document.querySelector("main").style.opacity = "1";
 }
 
-/* ========= Info page animations ========= */
 function startInfoAnimations() {
   const reveals = document.querySelectorAll(".reveal");
-  reveals.forEach((el, i) => {
-    setTimeout(() => el.classList.add("visible"), i * 112);
-  });
+  reveals.forEach((el, i) =>
+    setTimeout(() => el.classList.add("visible"), i * 150)
+  );
 
   const setSideHover = (side) => {
     const b = document.body;
@@ -139,15 +93,14 @@ function startInfoAnimations() {
       b.classList.remove("focus-left");
     }
   };
-
   const clearSideHover = () =>
     document.body.classList.remove("focus-left", "focus-right");
 
-  document.querySelectorAll('[data-side="left"]').forEach((el) => {
+  document.querySelectorAll('[data-side="left"]').forEach(el => {
     el.addEventListener("mouseenter", () => setSideHover("left"));
     el.addEventListener("mouseleave", clearSideHover);
   });
-  document.querySelectorAll('[data-side="right"]').forEach((el) => {
+  document.querySelectorAll('[data-side="right"]').forEach(el => {
     el.addEventListener("mouseenter", () => setSideHover("right"));
     el.addEventListener("mouseleave", clearSideHover);
   });
@@ -155,7 +108,7 @@ function startInfoAnimations() {
   document.querySelector("main").style.opacity = "1";
 }
 
-/* ========= Lazy loading ========= */
+/* ========= Lazy Loading ========= */
 function initLazyLoad() {
   const lazyImgs = document.querySelectorAll(".image.lazy");
   if (!lazyImgs.length) return;
@@ -166,46 +119,45 @@ function initLazyLoad() {
         if (!entry.isIntersecting) return;
         const img = entry.target;
         img.classList.add("inview");
-
         const hi = new Image();
         hi.src = img.dataset.src || img.src;
         hi.onload = () => {
           img.src = hi.src;
           img.classList.add("loaded");
         };
-
         io.unobserve(img);
       });
     },
     { threshold: 0.12 }
   );
 
-  lazyImgs.forEach((img) => io.observe(img));
+  lazyImgs.forEach((i) => io.observe(i));
 }
 
-/* ========= Clickable images ========= */
+/* ========= Clickable Images ========= */
 function initImageLinks() {
   document.querySelectorAll(".image").forEach((img) => {
-    if (img.dataset?.link) {
+    if (img.dataset && img.dataset.link) {
       img.style.cursor = "alias";
-      img.onclick = () => window.open(img.dataset.link, "_blank");
+      img.addEventListener("click", () =>
+        window.open(img.dataset.link, "_blank")
+      );
     }
   });
 }
 
 /* ========= Grid overlay toggle ========= */
 document.addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() === "g") {
-    document.body.classList.toggle("show-grid");
-  }
+  if (e.key.toLowerCase() === "g") document.body.classList.toggle("show-grid");
 });
 
-/* ========= Internal navigation ========= */
+/* ========= Bind internal navigation ========= */
 function bindInternalLinks(scope = document) {
   scope.querySelectorAll("a[href]").forEach((link) => {
     const href = link.getAttribute("href");
+    if (!href) return;
+
     if (
-      !href ||
       href.startsWith("http") ||
       href.startsWith("mailto:") ||
       href.startsWith("#") ||
@@ -213,10 +165,10 @@ function bindInternalLinks(scope = document) {
     )
       return;
 
-    link.onclick = (e) => {
+    link.addEventListener("click", (e) => {
       e.preventDefault();
       navigateTo(href);
-    };
+    });
   });
 }
 
@@ -227,49 +179,64 @@ function navigateTo(href, { replace = false } = {}) {
   fetch(absolute, { credentials: "same-origin" })
     .then((res) => res.text())
     .then((html) => {
-      const doc = new DOMParser().parseFromString(html, "text/html");
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+
       const newMain = doc.querySelector("main");
       const newFooter = doc.querySelector("footer");
+      const newTitle =
+        doc.querySelector("title")?.textContent || document.title;
+      const newBodyClass = doc.body.className;
 
-      if (!newMain || !newFooter) {
+      if (newMain && newFooter) {
+        /* Replace main + footer */
+        document.querySelector("main").replaceWith(newMain);
+        document.querySelector("footer").replaceWith(newFooter);
+
+        /* ALWAYS force them hidden immediately */
+        const insertedMain = document.querySelector("main");
+        const insertedFooter = document.querySelector("footer");
+        insertedMain.style.opacity = "0";
+        insertedMain.classList.add("content-loading");
+        insertedFooter.style.opacity = "0";
+
+        /* Update body class and title */
+        document.body.className = newBodyClass;
+        document.title = newTitle;
+
+        /* Update history */
+        if (replace) history.replaceState({}, "", absolute);
+        else history.pushState({}, "", absolute);
+
+        bindInternalLinks(document);
+
+        /* Initialize animations but DO NOT reveal immediately */
+        initPageContent();
+
+        /* Reveal both main + footer once everything is attached */
+        setTimeout(() => {
+          insertedMain.style.opacity = "1";
+          insertedMain.classList.remove("content-loading");
+          insertedFooter.style.opacity = "1";
+        }, 60);
+
+        window.scrollTo(0, 0);
+      } else {
         window.location.href = absolute;
-        return;
       }
-
-      document.querySelector("main").replaceWith(newMain);
-      document.querySelector("footer").replaceWith(newFooter);
-
-      document.body.className = doc.body.className;
-      document.title = doc.title;
-
-      replace
-        ? history.replaceState({}, "", absolute)
-        : history.pushState({}, "", absolute);
-
-      bindInternalLinks(document);
-      initPageContent();
-
-      setTimeout(() => {
-        document.querySelector("main").style.opacity = "1";
-        document.querySelector("footer").style.opacity = "1";
-      }, 45);
-
-      window.scrollTo(0, 0);
     })
     .catch(() => (window.location.href = absolute));
 }
 
-/* ========= Init ========= */
+/* ========= Init per page ========= */
 function initPageContent() {
-  document.body.classList.contains("info-page")
-    ? startInfoAnimations()
-    : startIndexAnimations();
+  const isInfo = document.body.classList.contains("info-page");
+  if (isInfo) startInfoAnimations();
+  else startIndexAnimations();
 }
 
 /* ========= Boot ========= */
 document.addEventListener("DOMContentLoaded", () => {
-  startFaviconBlink();
-
   if (!hasSeenIntro) {
     runTopbarAnimation(() => {
       initPageContent();
@@ -282,6 +249,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   window.addEventListener("popstate", () => {
-    navigateTo(location.pathname + location.search, { replace: true });
+    navigateTo(window.location.pathname + window.location.search, {
+      replace: true,
+    });
   });
 });
