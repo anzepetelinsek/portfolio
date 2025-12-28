@@ -165,7 +165,7 @@ video.image.visible { opacity: 1; }
 /* Fixed-to-viewport state */
 .caption.is-fixed {
   position: fixed;
-  bottom: 5px; /* must match JS OFFSET_BOTTOM */
+  bottom: var(--cap-bottom, 5px); /* NEW: JS-controlled clamp */
   left: calc(var(--cap-left, 0px) - 3px);
 }
 
