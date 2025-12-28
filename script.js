@@ -45,7 +45,8 @@ function runTopbarAnimation(callback) {
   setLoading("intro", true);
 
   const states = ["", ".", "..", "..."];
-  let index = 0, loops = 0;
+  let index = 0,
+    loops = 0;
 
   nameEl.style.opacity = "1";
   ellipsis.style.opacity = "1";
@@ -106,8 +107,8 @@ const REVEAL_THRESHOLD = 0.02;
 
 // Pixel timing (FASTER DEFAULTS)
 const PIXEL_STEPS = [88, 60, 40, 26, 16, 10, 6, 3, 1];
-const PIXEL_HOLD_MS = 80;      // was 220
-const PIXEL_DURATION = 650;    // was 1100
+const PIXEL_HOLD_MS = 80; // was 220
+const PIXEL_DURATION = 650; // was 1100
 
 // Per-target overlay store
 const overlayStore = new WeakMap();
@@ -115,10 +116,7 @@ const overlayStore = new WeakMap();
 /* ---------- Utilities ---------- */
 
 function ensureImgSrc(img) {
-  if (
-    img?.dataset?.src &&
-    (!img.getAttribute("src") || img.getAttribute("src") === "")
-  ) {
+  if (img?.dataset?.src && (!img.getAttribute("src") || img.getAttribute("src") === "")) {
     img.setAttribute("src", img.dataset.src);
   }
   try {
@@ -168,7 +166,7 @@ function layoutCanvasToMediaRect(wrapper, overlay) {
   canvas.width = w;
   canvas.height = h;
 
-  return (r.width > 0.5 && r.height > 0.5);
+  return r.width > 0.5 && r.height > 0.5;
 }
 
 function insertPixelCanvas(wrapper, sourceEl) {
@@ -212,7 +210,8 @@ function hash32(str) {
 
 function drawRoughPlaceholder(overlay, seedStr) {
   const { canvas, ctx, off, offCtx } = overlay;
-  const W = canvas.width, H = canvas.height;
+  const W = canvas.width,
+    H = canvas.height;
   if (W <= 0 || H <= 0) return;
 
   const px = PIXEL_STEPS[0] || 64;
@@ -223,8 +222,7 @@ function drawRoughPlaceholder(overlay, seedStr) {
   off.height = hSmall;
 
   let s = hash32(seedStr || "seed");
-  const rand = () =>
-    ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const rand = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
 
   offCtx.clearRect(0, 0, wSmall, hSmall);
   for (let y = 0; y < hSmall; y++) {
@@ -243,7 +241,8 @@ function drawRoughPlaceholder(overlay, seedStr) {
 
 function drawPixelatedFromSource(overlay, sourceEl, pixelSize) {
   const { canvas, ctx, off, offCtx } = overlay;
-  const W = canvas.width, H = canvas.height;
+  const W = canvas.width,
+    H = canvas.height;
   if (W <= 0 || H <= 0) return;
 
   const px = Number.isFinite(pixelSize) && pixelSize >= 1 ? pixelSize : 1;
@@ -292,7 +291,8 @@ function ensureImageReady(img, timeoutMs = 12000) {
     img.addEventListener("error", onError, { once: true });
 
     if (img.decode) {
-      img.decode()
+      img
+        .decode()
         .then(() => {
           if (img.complete && img.naturalWidth > 0) done(true, "decode");
         })
@@ -502,10 +502,7 @@ async function prepareVideo(video) {
 
   const sized = await sizeCanvasNonZero(wrapper, overlay);
   if (sized) {
-    drawRoughPlaceholder(
-      overlay,
-      video.currentSrc || video.src || video.getAttribute("poster") || "video"
-    );
+    drawRoughPlaceholder(overlay, video.currentSrc || video.src || video.getAttribute("poster") || "video");
   }
 
   updateHoverPixelLoading();
@@ -564,8 +561,9 @@ function initPixelObservers({ excludeImgs = new Set() } = {}) {
   if (preloadIO) preloadIO.disconnect();
   if (revealIO) revealIO.disconnect();
 
-  const imgTargets = Array.from(document.querySelectorAll("main .image-wrapper img.image"))
-    .filter((img) => !excludeImgs.has(img));
+  const imgTargets = Array.from(document.querySelectorAll("main .image-wrapper img.image")).filter(
+    (img) => !excludeImgs.has(img)
+  );
 
   const videoTargets = Array.from(document.querySelectorAll("main .image-wrapper video.image"));
 
@@ -641,12 +639,17 @@ function initHoverStickyCaptions() {
 
   const OFFSET_BOTTOM = 5;
 
+  // Clamp knobs (match your CSS `.caption { bottom: 2px; }`)
+  const WRAPPER_BOTTOM_PAD = 2;
+  const WRAPPER_TOP_PAD = 0;
+
   let active = null;
   let ticking = false;
 
   const clearCaptionState = (caption) => {
     caption.classList.remove("is-fixed", "is-active");
     caption.style.removeProperty("--cap-left");
+    caption.style.removeProperty("--cap-bottom"); // NEW: used for top/bottom clamping while fixed
   };
 
   const deactivate = () => {
@@ -683,15 +686,42 @@ function initHoverStickyCaptions() {
 
     if (!inView) {
       caption.classList.remove("is-fixed");
+      caption.style.removeProperty("--cap-bottom");
       return;
     }
 
     caption.style.setProperty("--cap-left", `${r.left}px`);
 
-    const baseline = window.innerHeight - OFFSET_BOTTOM;
-    const shouldFix = r.bottom > baseline;
+    const baselineY = window.innerHeight - OFFSET_BOTTOM;
+    const shouldFix = r.bottom > baselineY;
 
-    caption.classList.toggle("is-fixed", shouldFix);
+    if (!shouldFix) {
+      caption.classList.remove("is-fixed");
+      caption.style.removeProperty("--cap-bottom");
+      return;
+    }
+
+    // Fixed mode with CLAMP:
+    // - prefer sticking to viewport bottom baseline
+    // - but never let caption run ABOVE wrapper top
+    // - and never let caption go BELOW wrapper bottom (to match “bottom-aligned until unstick”)
+    const capH = caption.getBoundingClientRect().height || 0;
+
+    // Desired bottom edge in viewport Y-space
+    let bottomY = Math.min(baselineY, r.bottom - WRAPPER_BOTTOM_PAD);
+
+    // Clamp bottomY so caption’s TOP never rises above wrapper top
+    const minBottomY = r.top + WRAPPER_TOP_PAD + capH;
+    const maxBottomY = r.bottom - WRAPPER_BOTTOM_PAD;
+
+    bottomY = Math.max(bottomY, minBottomY);
+    bottomY = Math.min(bottomY, maxBottomY);
+
+    // Convert viewport Y -> CSS bottom (distance from viewport bottom)
+    const bottomPx = window.innerHeight - bottomY;
+
+    caption.style.setProperty("--cap-bottom", `${bottomPx}px`);
+    caption.classList.add("is-fixed");
   };
 
   const requestUpdate = () => {
@@ -702,7 +732,9 @@ function initHoverStickyCaptions() {
 
   const onScroll = () => requestUpdate();
   const onResize = () => requestUpdate();
-  const onKeyDown = (e) => { if (e.key === "Escape") deactivate(); };
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") deactivate();
+  };
 
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", onResize);
@@ -753,12 +785,8 @@ function bindInternalLinks(scope = document) {
     const href = link.getAttribute("href");
     if (!href) return;
 
-    if (
-      href.startsWith("http") ||
-      href.startsWith("mailto:") ||
-      href.startsWith("#") ||
-      link.target === "_blank"
-    ) return;
+    if (href.startsWith("http") || href.startsWith("mailto:") || href.startsWith("#") || link.target === "_blank")
+      return;
 
     if (link.dataset.navBound === "1") return;
     link.dataset.navBound = "1";
@@ -833,9 +861,9 @@ function startIndexAnimations() {
   document.body.classList.add("index-prelude");
   setLoading("indexPrelude", true);
 
-  const firstImgs = Array.from(document.querySelectorAll(
-    ".image-wrapper.jaka1 img.image, .image-wrapper.jaka2 img.image, .image-wrapper.jaka3 img.image"
-  ));
+  const firstImgs = Array.from(
+    document.querySelectorAll(".image-wrapper.jaka1 img.image, .image-wrapper.jaka2 img.image, .image-wrapper.jaka3 img.image")
+  );
   const excludeImgs = new Set(firstImgs);
 
   // Index timing knobs
@@ -844,9 +872,12 @@ function startIndexAnimations() {
 
   initImageLinks();
 
-  const promises = firstImgs.map((img, i) => new Promise((resolve) => {
-    setTimeout(() => revealImg(img, resolve), FIRST_IMAGE_DELAY + i * STAGGER);
-  }));
+  const promises = firstImgs.map(
+    (img, i) =>
+      new Promise((resolve) => {
+        setTimeout(() => revealImg(img, resolve), FIRST_IMAGE_DELAY + i * STAGGER);
+      })
+  );
 
   Promise.all(promises).then(() => {
     document.body.classList.remove("index-prelude");
@@ -872,7 +903,7 @@ function startInfoAnimations() {
 
   reveals.forEach((el, i) => setTimeout(() => el.classList.add("visible"), i * INFO_STAGGER));
 
-  const totalMs = (Math.max(0, reveals.length - 1) * INFO_STAGGER) + 200;
+  const totalMs = Math.max(0, reveals.length - 1) * INFO_STAGGER + 200;
   infoRevealTimer = setTimeout(() => {
     setLoading("infoReveal", false);
     infoRevealTimer = null;
@@ -904,8 +935,14 @@ function startInfoAnimations() {
 
 /* ========= Init per page ========= */
 function initPageContent() {
-  if (preloadIO) { preloadIO.disconnect(); preloadIO = null; }
-  if (revealIO) { revealIO.disconnect(); revealIO = null; }
+  if (preloadIO) {
+    preloadIO.disconnect();
+    preloadIO = null;
+  }
+  if (revealIO) {
+    revealIO.disconnect();
+    revealIO = null;
+  }
 
   if (hoverStickyCaptionsCleanup) hoverStickyCaptionsCleanup();
 
@@ -914,7 +951,10 @@ function initPageContent() {
 
   setHoveredWrapperForLoading(null);
   setLoading("infoReveal", false);
-  if (infoRevealTimer) { clearTimeout(infoRevealTimer); infoRevealTimer = null; }
+  if (infoRevealTimer) {
+    clearTimeout(infoRevealTimer);
+    infoRevealTimer = null;
+  }
 
   const isInfo = document.body.classList.contains("info-page");
   if (isInfo) startInfoAnimations();
