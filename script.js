@@ -3,7 +3,6 @@ const hasSeenIntro = sessionStorage.getItem("hasSeenIntro");
 
 /* ========= Loading cursor state (native OS cursor via CSS) ========= */
 const loadingReasons = new Set();
-
 function setLoading(reason, on) {
   if (on) loadingReasons.add(reason);
   else loadingReasons.delete(reason);
@@ -32,15 +31,14 @@ function setHoveredWrapperForLoading(wrapperOrNull) {
   hoveredWrapperForLoading = wrapperOrNull;
   updateHoverPixelLoading();
 }
-
 window.addEventListener("resize", updateHoverPixelLoading);
 
-/* Full topbar animation: name → dots → rest of topbar */
+/* ========= Topbar animation ========= */
 function runTopbarAnimation(callback) {
   const nameEl = document.querySelector(".name");
   const ellipsis = document.querySelector(".ellipsis");
   if (!nameEl || !ellipsis) {
-    if (callback) callback();
+    callback?.();
     return;
   }
 
@@ -85,7 +83,7 @@ function runTopbarAnimation(callback) {
         setTimeout(() => {
           sessionStorage.setItem("hasSeenIntro", "true");
           setLoading("intro", false);
-          if (callback) callback();
+          callback?.();
         }, afterMs);
       }, 150);
     }
@@ -101,15 +99,15 @@ function showTopbarInstantly() {
 let preloadIO = null;
 let revealIO = null;
 
-// Tweakables
+// Observer tweakables
 const PRELOAD_ROOT_MARGIN = "1000px";
 const REVEAL_ROOT_MARGIN = "0px";
 const REVEAL_THRESHOLD = 0.02;
 
-// Chunkiness / steps / timing
+// Pixel timing (FASTER DEFAULTS)
 const PIXEL_STEPS = [88, 60, 40, 26, 16, 10, 6, 3, 1];
-const PIXEL_HOLD_MS = 220;
-const PIXEL_DURATION = 1100;
+const PIXEL_HOLD_MS = 80;      // was 220
+const PIXEL_DURATION = 650;    // was 1100
 
 // Per-target overlay store
 const overlayStore = new WeakMap();
@@ -118,9 +116,7 @@ const overlayStore = new WeakMap();
 
 function ensureImgSrc(img) {
   if (
-    img &&
-    img.dataset &&
-    img.dataset.src &&
+    img?.dataset?.src &&
     (!img.getAttribute("src") || img.getAttribute("src") === "")
   ) {
     img.setAttribute("src", img.dataset.src);
@@ -133,16 +129,49 @@ function ensureImgSrc(img) {
 
 function applyCanvasInlineStyles(canvas) {
   canvas.style.position = "absolute";
-  canvas.style.inset = "0";
-  canvas.style.width = "100%";
-  canvas.style.height = "100%";
   canvas.style.display = "block";
   canvas.style.pointerEvents = "none";
   canvas.style.zIndex = "2";
   canvas.style.imageRendering = "pixelated";
+  // NOTE: we do NOT set inset/width/height here anymore (we compute exact rect below)
 }
 
-function insertPixelCanvas(wrapper) {
+/*
+  Snap fix:
+  Layout the canvas to match the *media element* rect (img/video) within the wrapper.
+  This makes the pixel overlay occupy the identical box as the eventual sharp media,
+  eliminating the 1px “snap” when the canvas is removed.
+*/
+function layoutCanvasToMediaRect(wrapper, overlay) {
+  const { canvas, sourceEl } = overlay;
+  const wr = wrapper.getBoundingClientRect();
+  const mr = sourceEl ? sourceEl.getBoundingClientRect() : wr;
+
+  // Prefer media rect if it's non-zero; otherwise fall back to wrapper rect
+  const useMedia = mr.width > 0.5 && mr.height > 0.5;
+  const r = useMedia ? mr : wr;
+
+  // Position canvas within wrapper
+  const top = r.top - wr.top;
+  const left = r.left - wr.left;
+
+  // Lock CSS size to the exact fractional px size (Fix 2 + better anchor)
+  canvas.style.top = `${top}px`;
+  canvas.style.left = `${left}px`;
+  canvas.style.width = `${r.width}px`;
+  canvas.style.height = `${r.height}px`;
+
+  // Internal backing store uses DPR
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(r.width * dpr));
+  const h = Math.max(1, Math.round(r.height * dpr));
+  canvas.width = w;
+  canvas.height = h;
+
+  return (r.width > 0.5 && r.height > 0.5);
+}
+
+function insertPixelCanvas(wrapper, sourceEl) {
   const canvas = document.createElement("canvas");
   canvas.className = "pixel-canvas";
   applyCanvasInlineStyles(canvas);
@@ -159,18 +188,14 @@ function insertPixelCanvas(wrapper) {
   offCtx.imageSmoothingEnabled = false;
 
   updateHoverPixelLoading();
-  return { canvas, ctx, off, offCtx, ro: null };
+
+  return { canvas, ctx, off, offCtx, ro: null, sourceEl };
 }
 
-async function sizeCanvasNonZero(wrapper, canvas, tries = 30) {
+async function sizeCanvasNonZero(wrapper, overlay, tries = 30) {
   for (let i = 0; i < tries; i++) {
-    const r = wrapper.getBoundingClientRect();
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const w = Math.max(1, Math.round(r.width * dpr));
-    const h = Math.max(1, Math.round(r.height * dpr));
-    canvas.width = w;
-    canvas.height = h;
-    if (w > 0 && h > 0) return true;
+    const ok = layoutCanvasToMediaRect(wrapper, overlay);
+    if (ok) return true;
     await new Promise((res) => requestAnimationFrame(res));
   }
   return false;
@@ -283,10 +308,7 @@ function ensureImageReady(img, timeoutMs = 12000) {
 function ensureVideoDrawable(video, timeoutMs = 12000) {
   return new Promise((resolve) => {
     if (!video) return resolve({ ok: false, reason: "no-video" });
-
-    if (video.readyState >= 2) {
-      return resolve({ ok: true, reason: "readyState" });
-    }
+    if (video.readyState >= 2) return resolve({ ok: true, reason: "readyState" });
 
     let settled = false;
     const done = (ok, reason) => {
@@ -333,15 +355,9 @@ function animateUnpixel({
   let lastIdx = 0;
 
   const resize = () => {
-    const r = wrapper.getBoundingClientRect();
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const w = Math.max(1, Math.round(r.width * dpr));
-    const h = Math.max(1, Math.round(r.height * dpr));
-    if (w > 0 && h > 0) {
-      canvas.width = w;
-      canvas.height = h;
-      drawPixelatedFromSource(overlay, sourceEl, steps[Math.min(lastIdx, steps.length - 1)]);
-    }
+    // Keep canvas locked to exact media rect and redraw current stage
+    layoutCanvasToMediaRect(wrapper, overlay);
+    drawPixelatedFromSource(overlay, sourceEl, steps[Math.min(lastIdx, steps.length - 1)]);
   };
 
   overlay.ro?.disconnect?.();
@@ -365,6 +381,8 @@ function animateUnpixel({
     const idx = Math.min(steps.length - 1, Math.floor(t * steps.length));
 
     if (idx !== lastIdx) {
+      // Ensure layout is still correct before drawing the next stage
+      layoutCanvasToMediaRect(wrapper, overlay);
       drawPixelatedFromSource(overlay, sourceEl, steps[idx]);
       lastIdx = idx;
     }
@@ -395,14 +413,14 @@ async function prepareImg(img) {
 
   let overlay = overlayStore.get(img);
   if (!overlay) {
-    overlay = insertPixelCanvas(wrapper);
+    overlay = insertPixelCanvas(wrapper, img);
     overlayStore.set(img, overlay);
+  } else {
+    overlay.sourceEl = img;
   }
 
-  const sized = await sizeCanvasNonZero(wrapper, overlay.canvas);
-  if (sized) {
-    drawRoughPlaceholder(overlay, img.currentSrc || img.src || "img");
-  }
+  const sized = await sizeCanvasNonZero(wrapper, overlay);
+  if (sized) drawRoughPlaceholder(overlay, img.currentSrc || img.src || "img");
 
   img.classList.add("visible");
   updateHoverPixelLoading();
@@ -410,6 +428,7 @@ async function prepareImg(img) {
   const ready = await ensureImageReady(img);
   if (ready.ok && document.body.contains(overlay.canvas)) {
     try {
+      layoutCanvasToMediaRect(wrapper, overlay);
       drawPixelatedFromSource(overlay, img, PIXEL_STEPS[0]);
       updateHoverPixelLoading();
     } catch {}
@@ -418,7 +437,6 @@ async function prepareImg(img) {
   img.dataset.pxPrepared = "1";
 }
 
-/* revealImg now supports an optional done callback (used by the Index prelude gate) */
 async function revealImg(img, doneCb) {
   const wrapper = img?.closest?.(".image-wrapper");
   if (!wrapper || !img || img.tagName !== "IMG") {
@@ -476,11 +494,13 @@ async function prepareVideo(video) {
 
   let overlay = overlayStore.get(video);
   if (!overlay) {
-    overlay = insertPixelCanvas(wrapper);
+    overlay = insertPixelCanvas(wrapper, video);
     overlayStore.set(video, overlay);
+  } else {
+    overlay.sourceEl = video;
   }
 
-  const sized = await sizeCanvasNonZero(wrapper, overlay.canvas);
+  const sized = await sizeCanvasNonZero(wrapper, overlay);
   if (sized) {
     drawRoughPlaceholder(
       overlay,
@@ -493,6 +513,7 @@ async function prepareVideo(video) {
   const vReady = await ensureVideoDrawable(video);
   if (vReady.ok && document.body.contains(overlay.canvas)) {
     try {
+      layoutCanvasToMediaRect(wrapper, overlay);
       drawPixelatedFromSource(overlay, video, PIXEL_STEPS[0]);
       updateHoverPixelLoading();
     } catch {}
@@ -611,14 +632,14 @@ let hoverStickyCaptionsCleanup = null;
 
 function initHoverStickyCaptions() {
   if (window.matchMedia("(max-width: 900px)").matches) return;
-  if (document.body.classList.contains("index-prelude")) return; // hard stop during prelude gate
+  if (document.body.classList.contains("index-prelude")) return;
 
   if (hoverStickyCaptionsCleanup) hoverStickyCaptionsCleanup();
 
   const wrappers = Array.from(document.querySelectorAll("main .image-wrapper"));
   if (!wrappers.length) return;
 
-  const OFFSET_BOTTOM = 5; // match your CSS .caption.is-fixed bottom
+  const OFFSET_BOTTOM = 5;
 
   let active = null;
   let ticking = false;
@@ -639,7 +660,6 @@ function initHoverStickyCaptions() {
     if (!caption) return;
 
     if (active && active.wrapper === wrapper) return;
-
     if (active) clearCaptionState(active.caption);
 
     active = { wrapper, caption };
@@ -784,10 +804,8 @@ function navigateTo(href, { replace = false } = {}) {
         if (replace) history.replaceState({}, "", absolute);
         else history.pushState({}, "", absolute);
 
-        // Ensure we're at the top BEFORE index prelude begins (prevents offscreen running)
         window.scrollTo(0, 0);
 
-        // Reset per-page bindings/behaviors
         bindInternalLinks(document);
         initPageContent();
 
@@ -812,20 +830,18 @@ function navigateTo(href, { replace = false } = {}) {
 function startIndexAnimations() {
   if (window.matchMedia("(max-width: 900px)").matches) return;
 
-  // Gate ON: only first three wrappers visible; captions blocked; footer hidden (CSS in index or style.css)
   document.body.classList.add("index-prelude");
   setLoading("indexPrelude", true);
 
   const firstImgs = Array.from(document.querySelectorAll(
     ".image-wrapper.jaka1 img.image, .image-wrapper.jaka2 img.image, .image-wrapper.jaka3 img.image"
   ));
-
   const excludeImgs = new Set(firstImgs);
 
-  const FIRST_IMAGE_DELAY = 180; // tweak this
-  const STAGGER = 112;           // tweak this
+  // Index timing knobs
+  const FIRST_IMAGE_DELAY = 180;
+  const STAGGER = 112;
 
-  // Do NOT init captions or observers yet (prevents captions and lower content from appearing/initializing)
   initImageLinks();
 
   const promises = firstImgs.map((img, i) => new Promise((resolve) => {
@@ -833,7 +849,6 @@ function startIndexAnimations() {
   }));
 
   Promise.all(promises).then(() => {
-    // Gate OFF: show rest of index + footer; allow captions
     document.body.classList.remove("index-prelude");
     setLoading("indexPrelude", false);
 
@@ -843,22 +858,21 @@ function startIndexAnimations() {
   });
 
   document.querySelectorAll(".image-wrapper").forEach((w) => w.classList.add("ready"));
-
-  const m = document.querySelector("main");
-  if (m) m.style.opacity = "1";
+  document.querySelector("main")?.style && (document.querySelector("main").style.opacity = "1");
 }
 
 let infoRevealTimer = null;
 
 function startInfoAnimations() {
-  // Loading cursor during info reveal stagger
   setLoading("infoReveal", true);
   if (infoRevealTimer) clearTimeout(infoRevealTimer);
 
   const reveals = document.querySelectorAll(".reveal");
-  reveals.forEach((el, i) => setTimeout(() => el.classList.add("visible"), i * 112));
+  const INFO_STAGGER = 112;
 
-  const totalMs = (Math.max(0, reveals.length - 1) * 112) + 200;
+  reveals.forEach((el, i) => setTimeout(() => el.classList.add("visible"), i * INFO_STAGGER));
+
+  const totalMs = (Math.max(0, reveals.length - 1) * INFO_STAGGER) + 200;
   infoRevealTimer = setTimeout(() => {
     setLoading("infoReveal", false);
     infoRevealTimer = null;
@@ -885,20 +899,16 @@ function startInfoAnimations() {
     el.addEventListener("mouseleave", clearSideHover);
   });
 
-  const m = document.querySelector("main");
-  if (m) m.style.opacity = "1";
+  document.querySelector("main")?.style && (document.querySelector("main").style.opacity = "1");
 }
 
 /* ========= Init per page ========= */
 function initPageContent() {
-  // Stop observers
   if (preloadIO) { preloadIO.disconnect(); preloadIO = null; }
   if (revealIO) { revealIO.disconnect(); revealIO = null; }
 
-  // Tear down captions if present
   if (hoverStickyCaptionsCleanup) hoverStickyCaptionsCleanup();
 
-  // Reset gating + loading reasons that must not leak between pages
   document.body.classList.remove("index-prelude");
   setLoading("indexPrelude", false);
 
