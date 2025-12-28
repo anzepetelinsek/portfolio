@@ -17,6 +17,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ===== Native OS loading cursor ===== */
+/* Swap 'wait' for 'progress' if you prefer arrow+spinner. */
+body.is-loading,
+body.is-loading * {
+  cursor: wait !important;
+}
+
 ::selection { background: transparent; color: #ff0000; }
 ::-moz-selection { background: transparent; color: #ff0000; }
 
@@ -26,12 +33,9 @@ body {
   top: 0; left: 0; right: 0; z-index: 100;
   height: calc(1.4vw + 10px);
   padding-top: 5px;
-  background: rgba(255,255,255,0.7);
-  backdrop-filter: blur(100px);
-  -webkit-backdrop-filter: blur(100px);
   transition: background 0.3s ease;
 }
-.topbar:hover { background: rgba(255,255,255,1); }
+.topbar:hover { background: rgba(255,255,255,0.95); }
 
 .grid {
   display: grid;
@@ -132,15 +136,36 @@ video.image.visible { opacity: 1; }
 .image-wrapper.slowness1 { grid-column: 2/7; }
 .image-wrapper.slowness2 { grid-column: 2/11; }
 
-/* Caption */
+/* ===== Caption (hover-only, single-active, sticky/fixed-then-lock) ===== */
 .caption {
-  position: absolute; bottom: 2px; left: -3px;
-  transform: rotate(-90deg); transform-origin: bottom left;
-  font-size: 0.7vw; line-height: 0.7vw; font-weight: 600;
-  color: #000; white-space: nowrap;
-  opacity: 0; transition: opacity 0.15s ease; pointer-events: none;
+  position: absolute;
+  bottom: 2px;
+  left: -3px;
+  transform: rotate(-90deg);
+  transform-origin: bottom left;
+  font-size: 0.7vw;
+  line-height: 0.7vw;
+  font-weight: 600;
+  color: #000;
+  white-space: nowrap;
+
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+
+  /* above pixel canvas overlay (canvas is z-index:2) */
+  z-index: 5;
 }
-.image-wrapper.ready:hover .caption { opacity: 1; }
+
+/* JS sets this on the single active caption */
+.caption.is-active { opacity: 1; }
+
+/* Fixed-to-viewport state */
+.caption.is-fixed {
+  position: fixed;
+  bottom: 5px; /* must match JS OFFSET_BOTTOM */
+  left: calc(var(--cap-left, 0px) - 3px);
+}
 
 /* ===== Info Page ===== */
 .reveal { visibility: hidden; }
@@ -209,7 +234,6 @@ main { padding-top: calc(1.4vw + 10px); }
   position: relative;
 }
 
-/* Both spans sit inline, but the long one is invisible initially */
 .projects-title .short,
 .projects-title .long {
   transition: opacity 0.3s ease;
@@ -217,20 +241,13 @@ main { padding-top: calc(1.4vw + 10px); }
 
 .projects-title .long {
   opacity: 0;
-  position: absolute; 
+  position: absolute;
   left: 0;
   top: 0;
 }
 
-/* Hover swap */
-.projects-block:hover .projects-title .short {
-  opacity: 0;
-}
-
-.projects-block:hover .projects-title .long {
-  opacity: 1;
-}
-
+.projects-block:hover .projects-title .short { opacity: 0; }
+.projects-block:hover .projects-title .long { opacity: 1; }
 
 /* ===== Work & Education ===== */
 .work-wrap{grid-column:8/13;margin-top:23px}
