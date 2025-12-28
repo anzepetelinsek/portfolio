@@ -1,6 +1,40 @@
 /* ========= Session-aware topbar intro ========= */
 const hasSeenIntro = sessionStorage.getItem("hasSeenIntro");
 
+/* ========= Loading cursor state (native OS cursor via CSS) ========= */
+const loadingReasons = new Set();
+
+function setLoading(reason, on) {
+  if (on) loadingReasons.add(reason);
+  else loadingReasons.delete(reason);
+  document.body.classList.toggle("is-loading", loadingReasons.size > 0);
+}
+
+/* ========= Hovered pixel-canvas loading (ONLY on hovered pixelated wrapper) ========= */
+let hoveredWrapperForLoading = null;
+
+function updateHoverPixelLoading() {
+  if (window.matchMedia("(max-width: 900px)").matches) {
+    setLoading("hoverPixels", false);
+    hoveredWrapperForLoading = null;
+    return;
+  }
+  if (!hoveredWrapperForLoading || !document.body.contains(hoveredWrapperForLoading)) {
+    setLoading("hoverPixels", false);
+    hoveredWrapperForLoading = null;
+    return;
+  }
+  const hasCanvas = !!hoveredWrapperForLoading.querySelector(".pixel-canvas");
+  setLoading("hoverPixels", hasCanvas);
+}
+
+function setHoveredWrapperForLoading(wrapperOrNull) {
+  hoveredWrapperForLoading = wrapperOrNull;
+  updateHoverPixelLoading();
+}
+
+window.addEventListener("resize", updateHoverPixelLoading);
+
 /* Full topbar animation: name → dots → rest of topbar */
 function runTopbarAnimation(callback) {
   const nameEl = document.querySelector(".name");
@@ -10,13 +44,14 @@ function runTopbarAnimation(callback) {
     return;
   }
 
+  setLoading("intro", true);
+
   const states = ["", ".", "..", "..."];
   let index = 0, loops = 0;
 
   nameEl.style.opacity = "1";
   ellipsis.style.opacity = "1";
 
-  /* dot speed intentionally unchanged */
   const interval = setInterval(() => {
     ellipsis.textContent = states[index];
     index = (index + 1) % states.length;
@@ -38,7 +73,6 @@ function runTopbarAnimation(callback) {
           ".contact-links",
         ];
 
-        /* ⬇️ faster cascade (was 135ms) */
         topbarEls.forEach((sel, i) => {
           setTimeout(() => {
             const el = document.querySelector(sel);
@@ -46,11 +80,11 @@ function runTopbarAnimation(callback) {
           }, i * 100);
         });
 
-        /* ⬇️ adjusted completion timing */
         const afterMs = topbarEls.length * 100 + 250;
 
         setTimeout(() => {
           sessionStorage.setItem("hasSeenIntro", "true");
+          setLoading("intro", false);
           if (callback) callback();
         }, afterMs);
       }, 150);
@@ -60,98 +94,632 @@ function runTopbarAnimation(callback) {
 
 function showTopbarInstantly() {
   document.body.classList.add("instant-topbar");
-  document.querySelectorAll(".topbar .col")
-    .forEach(el => el.style.opacity = "1");
+  document.querySelectorAll(".topbar .col").forEach((el) => (el.style.opacity = "1"));
 }
 
-/* ========= Page-specific animations ========= */
-function startIndexAnimations() {
-  /* ⬇️ faster image stagger (was 150ms) */
-  const firstImgs = document.querySelectorAll(
-    ".image-wrapper.jaka1 .image, .image-wrapper.jaka2 .image, .image-wrapper.jaka3 .image"
-  );
-  firstImgs.forEach((img, i) =>
-    setTimeout(() => img.classList.add("visible"), i * 112)
-  );
+/* ========= Pixelated reveal (two-phase: PREPARE -> REVEAL) ========= */
+let preloadIO = null;
+let revealIO = null;
 
-  initLazyLoad();
-  initImageLinks();
+// Tweakables
+const PRELOAD_ROOT_MARGIN = "1000px";
+const REVEAL_ROOT_MARGIN = "0px";
+const REVEAL_THRESHOLD = 0.02;
 
-  document.querySelectorAll(".image-wrapper").forEach(w =>
-    w.classList.add("ready")
-  );
+// Chunkiness / steps / timing
+const PIXEL_STEPS = [88, 60, 40, 26, 16, 10, 6, 3, 1];
+const PIXEL_HOLD_MS = 220;
+const PIXEL_DURATION = 1100;
 
-  document.querySelector("main").style.opacity = "1";
+// Per-target overlay store
+const overlayStore = new WeakMap();
+
+/* ---------- Utilities ---------- */
+
+function ensureImgSrc(img) {
+  if (
+    img &&
+    img.dataset &&
+    img.dataset.src &&
+    (!img.getAttribute("src") || img.getAttribute("src") === "")
+  ) {
+    img.setAttribute("src", img.dataset.src);
+  }
+  try {
+    img.loading = "lazy";
+    img.decoding = "async";
+  } catch {}
 }
 
-function startInfoAnimations() {
-  /* ⬇️ faster reveal stagger (was 150ms) */
-  const reveals = document.querySelectorAll(".reveal");
-  reveals.forEach((el, i) =>
-    setTimeout(() => el.classList.add("visible"), i * 112)
-  );
+function applyCanvasInlineStyles(canvas) {
+  canvas.style.position = "absolute";
+  canvas.style.inset = "0";
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  canvas.style.display = "block";
+  canvas.style.pointerEvents = "none";
+  canvas.style.zIndex = "2";
+  canvas.style.imageRendering = "pixelated";
+}
 
-  const setSideHover = (side) => {
-    const b = document.body;
-    if (side === "left") {
-      b.classList.add("focus-left");
-      b.classList.remove("focus-right");
-    } else if (side === "right") {
-      b.classList.add("focus-right");
-      b.classList.remove("focus-left");
+function insertPixelCanvas(wrapper) {
+  const canvas = document.createElement("canvas");
+  canvas.className = "pixel-canvas";
+  applyCanvasInlineStyles(canvas);
+
+  const caption = wrapper.querySelector(".caption");
+  if (caption) wrapper.insertBefore(canvas, caption);
+  else wrapper.appendChild(canvas);
+
+  const ctx = canvas.getContext("2d", { alpha: true });
+  const off = document.createElement("canvas");
+  const offCtx = off.getContext("2d", { alpha: true });
+
+  ctx.imageSmoothingEnabled = false;
+  offCtx.imageSmoothingEnabled = false;
+
+  updateHoverPixelLoading();
+  return { canvas, ctx, off, offCtx, ro: null };
+}
+
+async function sizeCanvasNonZero(wrapper, canvas, tries = 30) {
+  for (let i = 0; i < tries; i++) {
+    const r = wrapper.getBoundingClientRect();
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const w = Math.max(1, Math.round(r.width * dpr));
+    const h = Math.max(1, Math.round(r.height * dpr));
+    canvas.width = w;
+    canvas.height = h;
+    if (w > 0 && h > 0) return true;
+    await new Promise((res) => requestAnimationFrame(res));
+  }
+  return false;
+}
+
+function hash32(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function drawRoughPlaceholder(overlay, seedStr) {
+  const { canvas, ctx, off, offCtx } = overlay;
+  const W = canvas.width, H = canvas.height;
+  if (W <= 0 || H <= 0) return;
+
+  const px = PIXEL_STEPS[0] || 64;
+  const wSmall = Math.max(1, Math.round(W / px));
+  const hSmall = Math.max(1, Math.round(H / px));
+
+  off.width = wSmall;
+  off.height = hSmall;
+
+  let s = hash32(seedStr || "seed");
+  const rand = () =>
+    ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+
+  offCtx.clearRect(0, 0, wSmall, hSmall);
+  for (let y = 0; y < hSmall; y++) {
+    for (let x = 0; x < wSmall; x++) {
+      const r = rand();
+      const v = Math.floor(245 - r * 45);
+      offCtx.fillStyle = `rgb(${v},${v},${v})`;
+      offCtx.fillRect(x, y, 1, 1);
+    }
+  }
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(off, 0, 0, wSmall, hSmall, 0, 0, W, H);
+}
+
+function drawPixelatedFromSource(overlay, sourceEl, pixelSize) {
+  const { canvas, ctx, off, offCtx } = overlay;
+  const W = canvas.width, H = canvas.height;
+  if (W <= 0 || H <= 0) return;
+
+  const px = Number.isFinite(pixelSize) && pixelSize >= 1 ? pixelSize : 1;
+  const wSmall = Math.max(1, Math.round(W / px));
+  const hSmall = Math.max(1, Math.round(H / px));
+
+  off.width = wSmall;
+  off.height = hSmall;
+
+  offCtx.clearRect(0, 0, wSmall, hSmall);
+  offCtx.imageSmoothingEnabled = false;
+  ctx.imageSmoothingEnabled = false;
+
+  offCtx.drawImage(sourceEl, 0, 0, wSmall, hSmall);
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(off, 0, 0, wSmall, hSmall, 0, 0, W, H);
+}
+
+function ensureImageReady(img, timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    if (!img) return resolve({ ok: false, reason: "no-img" });
+
+    if (img.complete && img.naturalWidth > 0) {
+      return resolve({ ok: true, reason: "complete" });
+    }
+
+    let settled = false;
+    const done = (ok, reason) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve({ ok, reason });
+    };
+
+    const onLoad = () => done(img.naturalWidth > 0, "load");
+    const onError = () => done(false, "error");
+
+    const cleanup = () => {
+      img.removeEventListener("load", onLoad);
+      img.removeEventListener("error", onError);
+      clearTimeout(timer);
+    };
+
+    img.addEventListener("load", onLoad, { once: true });
+    img.addEventListener("error", onError, { once: true });
+
+    if (img.decode) {
+      img.decode()
+        .then(() => {
+          if (img.complete && img.naturalWidth > 0) done(true, "decode");
+        })
+        .catch(() => {});
+    }
+
+    const timer = setTimeout(() => {
+      done(img.complete && img.naturalWidth > 0, "timeout");
+    }, timeoutMs);
+  });
+}
+
+function ensureVideoDrawable(video, timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    if (!video) return resolve({ ok: false, reason: "no-video" });
+
+    if (video.readyState >= 2) {
+      return resolve({ ok: true, reason: "readyState" });
+    }
+
+    let settled = false;
+    const done = (ok, reason) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve({ ok, reason });
+    };
+
+    const onLoaded = () => done(true, "loadeddata");
+    const onError = () => done(false, "error");
+
+    const cleanup = () => {
+      video.removeEventListener("loadeddata", onLoaded);
+      video.removeEventListener("canplay", onLoaded);
+      video.removeEventListener("error", onError);
+      clearTimeout(timer);
+    };
+
+    video.addEventListener("loadeddata", onLoaded, { once: true });
+    video.addEventListener("canplay", onLoaded, { once: true });
+    video.addEventListener("error", onError, { once: true });
+
+    const timer = setTimeout(() => {
+      done(video.readyState >= 2, "timeout");
+    }, timeoutMs);
+  });
+}
+
+/* ---------- Animation ---------- */
+
+function animateUnpixel({
+  wrapper,
+  overlay,
+  sourceEl,
+  steps = PIXEL_STEPS,
+  holdMs = PIXEL_HOLD_MS,
+  duration = PIXEL_DURATION,
+  onDone,
+}) {
+  const { canvas } = overlay;
+
+  let raf = 0;
+  let lastIdx = 0;
+
+  const resize = () => {
+    const r = wrapper.getBoundingClientRect();
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const w = Math.max(1, Math.round(r.width * dpr));
+    const h = Math.max(1, Math.round(r.height * dpr));
+    if (w > 0 && h > 0) {
+      canvas.width = w;
+      canvas.height = h;
+      drawPixelatedFromSource(overlay, sourceEl, steps[Math.min(lastIdx, steps.length - 1)]);
     }
   };
-  const clearSideHover = () =>
-    document.body.classList.remove("focus-left", "focus-right");
 
-  document.querySelectorAll('[data-side="left"]').forEach(el => {
-    el.addEventListener("mouseenter", () => setSideHover("left"));
-    el.addEventListener("mouseleave", clearSideHover);
-  });
-  document.querySelectorAll('[data-side="right"]').forEach(el => {
-    el.addEventListener("mouseenter", () => setSideHover("right"));
-    el.addEventListener("mouseleave", clearSideHover);
-  });
+  overlay.ro?.disconnect?.();
+  if (window.ResizeObserver) {
+    overlay.ro = new ResizeObserver(resize);
+    overlay.ro.observe(wrapper);
+  }
 
-  document.querySelector("main").style.opacity = "1";
+  drawPixelatedFromSource(overlay, sourceEl, steps[0]);
+  lastIdx = 0;
+
+  const startAt = performance.now() + holdMs;
+
+  const frame = (now) => {
+    if (!document.body.contains(wrapper) || !document.body.contains(canvas)) {
+      finish();
+      return;
+    }
+
+    const t = Math.min(1, Math.max(0, (now - startAt) / duration));
+    const idx = Math.min(steps.length - 1, Math.floor(t * steps.length));
+
+    if (idx !== lastIdx) {
+      drawPixelatedFromSource(overlay, sourceEl, steps[idx]);
+      lastIdx = idx;
+    }
+
+    if (t < 1) raf = requestAnimationFrame(frame);
+    else finish();
+  };
+
+  const finish = () => {
+    cancelAnimationFrame(raf);
+    overlay.ro?.disconnect?.();
+    onDone?.();
+  };
+
+  raf = requestAnimationFrame(frame);
 }
 
-/* ========= Lazy Loading ========= */
-function initLazyLoad() {
-  const lazyImgs = document.querySelectorAll(".image.lazy");
-  if (!lazyImgs.length) return;
+/* ---------- Two-phase pipeline ---------- */
 
-  const io = new IntersectionObserver(
+async function prepareImg(img) {
+  const wrapper = img?.closest?.(".image-wrapper");
+  if (!wrapper || !img || img.tagName !== "IMG") return;
+
+  if (img.dataset.pxPrepared === "1" || img.dataset.pxPrepared === "running") return;
+  img.dataset.pxPrepared = "running";
+
+  ensureImgSrc(img);
+
+  let overlay = overlayStore.get(img);
+  if (!overlay) {
+    overlay = insertPixelCanvas(wrapper);
+    overlayStore.set(img, overlay);
+  }
+
+  const sized = await sizeCanvasNonZero(wrapper, overlay.canvas);
+  if (sized) {
+    drawRoughPlaceholder(overlay, img.currentSrc || img.src || "img");
+  }
+
+  img.classList.add("visible");
+  updateHoverPixelLoading();
+
+  const ready = await ensureImageReady(img);
+  if (ready.ok && document.body.contains(overlay.canvas)) {
+    try {
+      drawPixelatedFromSource(overlay, img, PIXEL_STEPS[0]);
+      updateHoverPixelLoading();
+    } catch {}
+  }
+
+  img.dataset.pxPrepared = "1";
+}
+
+/* revealImg now supports an optional done callback (used by the Index prelude gate) */
+async function revealImg(img, doneCb) {
+  const wrapper = img?.closest?.(".image-wrapper");
+  if (!wrapper || !img || img.tagName !== "IMG") {
+    doneCb?.();
+    return;
+  }
+
+  if (img.dataset.pxDone === "1") {
+    doneCb?.();
+    return;
+  }
+  if (img.dataset.pxDone === "running") return;
+
+  img.dataset.pxDone = "running";
+
+  await prepareImg(img);
+
+  const overlay = overlayStore.get(img);
+  if (!overlay || !document.body.contains(overlay.canvas)) {
+    img.dataset.pxDone = "1";
+    updateHoverPixelLoading();
+    doneCb?.();
+    return;
+  }
+
+  const ready = await ensureImageReady(img);
+  if (!ready.ok) {
+    img.classList.add("visible");
+    overlay.canvas.remove();
+    img.dataset.pxDone = "1";
+    updateHoverPixelLoading();
+    doneCb?.();
+    return;
+  }
+
+  animateUnpixel({
+    wrapper,
+    overlay,
+    sourceEl: img,
+    onDone: () => {
+      overlay.canvas.remove();
+      img.dataset.pxDone = "1";
+      updateHoverPixelLoading();
+      doneCb?.();
+    },
+  });
+}
+
+async function prepareVideo(video) {
+  const wrapper = video?.closest?.(".image-wrapper");
+  if (!wrapper || !video || video.tagName !== "VIDEO") return;
+
+  if (video.dataset.pxPrepared === "1" || video.dataset.pxPrepared === "running") return;
+  video.dataset.pxPrepared = "running";
+
+  let overlay = overlayStore.get(video);
+  if (!overlay) {
+    overlay = insertPixelCanvas(wrapper);
+    overlayStore.set(video, overlay);
+  }
+
+  const sized = await sizeCanvasNonZero(wrapper, overlay.canvas);
+  if (sized) {
+    drawRoughPlaceholder(
+      overlay,
+      video.currentSrc || video.src || video.getAttribute("poster") || "video"
+    );
+  }
+
+  updateHoverPixelLoading();
+
+  const vReady = await ensureVideoDrawable(video);
+  if (vReady.ok && document.body.contains(overlay.canvas)) {
+    try {
+      drawPixelatedFromSource(overlay, video, PIXEL_STEPS[0]);
+      updateHoverPixelLoading();
+    } catch {}
+  }
+
+  video.dataset.pxPrepared = "1";
+}
+
+async function revealVideo(video) {
+  const wrapper = video?.closest?.(".image-wrapper");
+  if (!wrapper || !video || video.tagName !== "VIDEO") return;
+
+  if (video.dataset.pxDone === "1" || video.dataset.pxDone === "running") return;
+  video.dataset.pxDone = "running";
+
+  await prepareVideo(video);
+
+  const overlay = overlayStore.get(video);
+  if (!overlay || !document.body.contains(overlay.canvas)) {
+    video.dataset.pxDone = "1";
+    updateHoverPixelLoading();
+    return;
+  }
+
+  const vReady = await ensureVideoDrawable(video);
+  if (!vReady.ok) {
+    overlay.canvas.remove();
+    video.dataset.pxDone = "1";
+    updateHoverPixelLoading();
+    return;
+  }
+
+  animateUnpixel({
+    wrapper,
+    overlay,
+    sourceEl: video,
+    onDone: () => {
+      overlay.canvas.remove();
+      video.dataset.pxDone = "1";
+      updateHoverPixelLoading();
+    },
+  });
+}
+
+/* ---------- Observers ---------- */
+
+function initPixelObservers({ excludeImgs = new Set() } = {}) {
+  if (preloadIO) preloadIO.disconnect();
+  if (revealIO) revealIO.disconnect();
+
+  const imgTargets = Array.from(document.querySelectorAll("main .image-wrapper img.image"))
+    .filter((img) => !excludeImgs.has(img));
+
+  const videoTargets = Array.from(document.querySelectorAll("main .image-wrapper video.image"));
+
+  if (!imgTargets.length && !videoTargets.length) return;
+
+  if (!("IntersectionObserver" in window)) {
+    imgTargets.forEach((img) => prepareImg(img).then(() => revealImg(img)));
+    videoTargets.forEach((v) => prepareVideo(v).then(() => revealVideo(v)));
+    return;
+  }
+
+  preloadIO = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
         if (!entry.isIntersecting) return;
-        const img = entry.target;
-        img.classList.add("inview");
-        const hi = new Image();
-        hi.src = img.dataset.src || img.src;
-        hi.onload = () => {
-          img.src = hi.src;
-          img.classList.add("loaded");
-        };
-        io.unobserve(img);
+        const el = entry.target;
+        preloadIO.unobserve(el);
+
+        if (el.tagName === "IMG") prepareImg(el);
+        else if (el.tagName === "VIDEO") prepareVideo(el);
       });
     },
-    { threshold: 0.12 }
+    { rootMargin: PRELOAD_ROOT_MARGIN, threshold: 0.01 }
   );
 
-  lazyImgs.forEach((i) => io.observe(i));
+  revealIO = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const el = entry.target;
+        revealIO.unobserve(el);
+
+        if (el.tagName === "IMG") revealImg(el);
+        else if (el.tagName === "VIDEO") revealVideo(el);
+      });
+    },
+    { rootMargin: REVEAL_ROOT_MARGIN, threshold: REVEAL_THRESHOLD }
+  );
+
+  imgTargets.forEach((img) => {
+    preloadIO.observe(img);
+    revealIO.observe(img);
+  });
+
+  videoTargets.forEach((v) => {
+    preloadIO.observe(v);
+    revealIO.observe(v);
+  });
 }
 
-/* ========= Clickable Images ========= */
+/* ========= Clickable Images/Videos ========= */
 function initImageLinks() {
-  document.querySelectorAll(".image").forEach((img) => {
-    if (img.dataset && img.dataset.link) {
-      img.style.cursor = "alias";
-      img.addEventListener("click", () =>
-        window.open(img.dataset.link, "_blank")
-      );
+  document.querySelectorAll(".image").forEach((el) => {
+    if (el.dataset && el.dataset.link && el.dataset.linkBound !== "1") {
+      el.dataset.linkBound = "1";
+      el.style.cursor = "alias";
+      el.addEventListener("click", () => window.open(el.dataset.link, "_blank"));
     }
   });
+}
+
+/* ========= Single-caption hover sticky system ========= */
+let hoverStickyCaptionsCleanup = null;
+
+function initHoverStickyCaptions() {
+  if (window.matchMedia("(max-width: 900px)").matches) return;
+  if (document.body.classList.contains("index-prelude")) return; // hard stop during prelude gate
+
+  if (hoverStickyCaptionsCleanup) hoverStickyCaptionsCleanup();
+
+  const wrappers = Array.from(document.querySelectorAll("main .image-wrapper"));
+  if (!wrappers.length) return;
+
+  const OFFSET_BOTTOM = 5; // match your CSS .caption.is-fixed bottom
+
+  let active = null;
+  let ticking = false;
+
+  const clearCaptionState = (caption) => {
+    caption.classList.remove("is-fixed", "is-active");
+    caption.style.removeProperty("--cap-left");
+  };
+
+  const deactivate = () => {
+    if (!active) return;
+    clearCaptionState(active.caption);
+    active = null;
+  };
+
+  const setActive = (wrapper) => {
+    const caption = wrapper.querySelector(".caption");
+    if (!caption) return;
+
+    if (active && active.wrapper === wrapper) return;
+
+    if (active) clearCaptionState(active.caption);
+
+    active = { wrapper, caption };
+    caption.classList.add("is-active");
+    requestUpdate();
+  };
+
+  const update = () => {
+    ticking = false;
+    if (!active) return;
+
+    const { wrapper, caption } = active;
+
+    if (!document.body.contains(wrapper)) {
+      deactivate();
+      return;
+    }
+
+    const r = wrapper.getBoundingClientRect();
+    const inView = r.bottom > 0 && r.top < window.innerHeight;
+
+    if (!inView) {
+      caption.classList.remove("is-fixed");
+      return;
+    }
+
+    caption.style.setProperty("--cap-left", `${r.left}px`);
+
+    const baseline = window.innerHeight - OFFSET_BOTTOM;
+    const shouldFix = r.bottom > baseline;
+
+    caption.classList.toggle("is-fixed", shouldFix);
+  };
+
+  const requestUpdate = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(update);
+  };
+
+  const onScroll = () => requestUpdate();
+  const onResize = () => requestUpdate();
+  const onKeyDown = (e) => { if (e.key === "Escape") deactivate(); };
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onResize);
+  window.addEventListener("keydown", onKeyDown);
+
+  const perWrapperHandlers = [];
+
+  wrappers.forEach((w) => {
+    const onEnter = () => {
+      setHoveredWrapperForLoading(w);
+      setActive(w);
+    };
+    const onLeave = () => {
+      if (active && active.wrapper === w) deactivate();
+      setHoveredWrapperForLoading(null);
+    };
+
+    w.addEventListener("mouseenter", onEnter);
+    w.addEventListener("mouseleave", onLeave);
+
+    perWrapperHandlers.push({ w, onEnter, onLeave });
+  });
+
+  hoverStickyCaptionsCleanup = () => {
+    window.removeEventListener("scroll", onScroll);
+    window.removeEventListener("resize", onResize);
+    window.removeEventListener("keydown", onKeyDown);
+
+    perWrapperHandlers.forEach(({ w, onEnter, onLeave }) => {
+      w.removeEventListener("mouseenter", onEnter);
+      w.removeEventListener("mouseleave", onLeave);
+    });
+
+    deactivate();
+    setHoveredWrapperForLoading(null);
+    hoverStickyCaptionsCleanup = null;
+  };
 }
 
 /* ========= Grid overlay toggle ========= */
@@ -170,8 +738,10 @@ function bindInternalLinks(scope = document) {
       href.startsWith("mailto:") ||
       href.startsWith("#") ||
       link.target === "_blank"
-    )
-      return;
+    ) return;
+
+    if (link.dataset.navBound === "1") return;
+    link.dataset.navBound = "1";
 
     link.addEventListener("click", (e) => {
       e.preventDefault();
@@ -184,6 +754,8 @@ function bindInternalLinks(scope = document) {
 function navigateTo(href, { replace = false } = {}) {
   const absolute = new URL(href, window.location.href).href;
 
+  setLoading("nav", true);
+
   fetch(absolute, { credentials: "same-origin" })
     .then((res) => res.text())
     .then((html) => {
@@ -192,8 +764,7 @@ function navigateTo(href, { replace = false } = {}) {
 
       const newMain = doc.querySelector("main");
       const newFooter = doc.querySelector("footer");
-      const newTitle =
-        doc.querySelector("title")?.textContent || document.title;
+      const newTitle = doc.querySelector("title")?.textContent || document.title;
       const newBodyClass = doc.body.className;
 
       if (newMain && newFooter) {
@@ -213,26 +784,128 @@ function navigateTo(href, { replace = false } = {}) {
         if (replace) history.replaceState({}, "", absolute);
         else history.pushState({}, "", absolute);
 
+        // Ensure we're at the top BEFORE index prelude begins (prevents offscreen running)
+        window.scrollTo(0, 0);
+
+        // Reset per-page bindings/behaviors
         bindInternalLinks(document);
         initPageContent();
 
-        /* ⬇️ faster micro reveal (was 60ms) */
         setTimeout(() => {
           insertedMain.style.opacity = "1";
           insertedMain.classList.remove("content-loading");
           insertedFooter.style.opacity = "1";
+          setLoading("nav", false);
         }, 45);
-
-        window.scrollTo(0, 0);
       } else {
+        setLoading("nav", false);
         window.location.href = absolute;
       }
     })
-    .catch(() => (window.location.href = absolute));
+    .catch(() => {
+      setLoading("nav", false);
+      window.location.href = absolute;
+    });
+}
+
+/* ========= Page-specific animations ========= */
+function startIndexAnimations() {
+  if (window.matchMedia("(max-width: 900px)").matches) return;
+
+  // Gate ON: only first three wrappers visible; captions blocked; footer hidden (CSS in index or style.css)
+  document.body.classList.add("index-prelude");
+  setLoading("indexPrelude", true);
+
+  const firstImgs = Array.from(document.querySelectorAll(
+    ".image-wrapper.jaka1 img.image, .image-wrapper.jaka2 img.image, .image-wrapper.jaka3 img.image"
+  ));
+
+  const excludeImgs = new Set(firstImgs);
+
+  const FIRST_IMAGE_DELAY = 180; // tweak this
+  const STAGGER = 112;           // tweak this
+
+  // Do NOT init captions or observers yet (prevents captions and lower content from appearing/initializing)
+  initImageLinks();
+
+  const promises = firstImgs.map((img, i) => new Promise((resolve) => {
+    setTimeout(() => revealImg(img, resolve), FIRST_IMAGE_DELAY + i * STAGGER);
+  }));
+
+  Promise.all(promises).then(() => {
+    // Gate OFF: show rest of index + footer; allow captions
+    document.body.classList.remove("index-prelude");
+    setLoading("indexPrelude", false);
+
+    initPixelObservers({ excludeImgs });
+    initHoverStickyCaptions();
+    updateHoverPixelLoading();
+  });
+
+  document.querySelectorAll(".image-wrapper").forEach((w) => w.classList.add("ready"));
+
+  const m = document.querySelector("main");
+  if (m) m.style.opacity = "1";
+}
+
+let infoRevealTimer = null;
+
+function startInfoAnimations() {
+  // Loading cursor during info reveal stagger
+  setLoading("infoReveal", true);
+  if (infoRevealTimer) clearTimeout(infoRevealTimer);
+
+  const reveals = document.querySelectorAll(".reveal");
+  reveals.forEach((el, i) => setTimeout(() => el.classList.add("visible"), i * 112));
+
+  const totalMs = (Math.max(0, reveals.length - 1) * 112) + 200;
+  infoRevealTimer = setTimeout(() => {
+    setLoading("infoReveal", false);
+    infoRevealTimer = null;
+  }, totalMs);
+
+  const setSideHover = (side) => {
+    const b = document.body;
+    if (side === "left") {
+      b.classList.add("focus-left");
+      b.classList.remove("focus-right");
+    } else if (side === "right") {
+      b.classList.add("focus-right");
+      b.classList.remove("focus-left");
+    }
+  };
+  const clearSideHover = () => document.body.classList.remove("focus-left", "focus-right");
+
+  document.querySelectorAll('[data-side="left"]').forEach((el) => {
+    el.addEventListener("mouseenter", () => setSideHover("left"));
+    el.addEventListener("mouseleave", clearSideHover);
+  });
+  document.querySelectorAll('[data-side="right"]').forEach((el) => {
+    el.addEventListener("mouseenter", () => setSideHover("right"));
+    el.addEventListener("mouseleave", clearSideHover);
+  });
+
+  const m = document.querySelector("main");
+  if (m) m.style.opacity = "1";
 }
 
 /* ========= Init per page ========= */
 function initPageContent() {
+  // Stop observers
+  if (preloadIO) { preloadIO.disconnect(); preloadIO = null; }
+  if (revealIO) { revealIO.disconnect(); revealIO = null; }
+
+  // Tear down captions if present
+  if (hoverStickyCaptionsCleanup) hoverStickyCaptionsCleanup();
+
+  // Reset gating + loading reasons that must not leak between pages
+  document.body.classList.remove("index-prelude");
+  setLoading("indexPrelude", false);
+
+  setHoveredWrapperForLoading(null);
+  setLoading("infoReveal", false);
+  if (infoRevealTimer) { clearTimeout(infoRevealTimer); infoRevealTimer = null; }
+
   const isInfo = document.body.classList.contains("info-page");
   if (isInfo) startInfoAnimations();
   else startIndexAnimations();
@@ -252,16 +925,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   window.addEventListener("popstate", () => {
-    navigateTo(window.location.pathname + window.location.search, {
-      replace: true,
-    });
+    navigateTo(window.location.pathname + window.location.search, { replace: true });
   });
 });
 
 /* ========= Blinking red favicon ========= */
 (function () {
   const SIZE = 32;
-  const BLINK_INTERVAL = 600; // ms — adjust if you want slower/faster
+  const BLINK_INTERVAL = 600;
 
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = SIZE;
@@ -294,4 +965,3 @@ document.addEventListener("DOMContentLoaded", () => {
     drawDot(visible);
   }, BLINK_INTERVAL);
 })();
-
