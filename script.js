@@ -111,7 +111,7 @@ const REVEAL_THRESHOLD = 0.02;
 // Pixel timing (FASTER DEFAULTS)
 const PIXEL_STEPS = [88, 44, 1];
 const PIXEL_HOLD_MS = 80; // was 220
-const PIXEL_DURATION = 650; // was 1100
+const PIXEL_DURATION = 450; // was 1100
 
 // Per-target overlay store
 const overlayStore = new WeakMap();
