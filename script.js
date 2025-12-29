@@ -1,6 +1,9 @@
 /* ========= Session-aware topbar intro ========= */
 const hasSeenIntro = sessionStorage.getItem("hasSeenIntro");
 
+/* ========= Route micro-pause (match index “prelude” feel) ========= */
+const INFO_PRELUDE_DELAY = 180; // ms pause before info reveals begin (from index -> info)
+
 /* ========= Loading cursor state (native OS cursor via CSS) ========= */
 const loadingReasons = new Set();
 function setLoading(reason, on) {
@@ -893,22 +896,18 @@ function startIndexAnimations() {
 }
 
 let infoRevealTimer = null;
+let infoPreludeTimer = null; // NEW: for the pause before reveals
 
 function startInfoAnimations() {
   setLoading("infoReveal", true);
+
   if (infoRevealTimer) clearTimeout(infoRevealTimer);
+  if (infoPreludeTimer) clearTimeout(infoPreludeTimer);
 
   const reveals = document.querySelectorAll(".reveal");
   const INFO_STAGGER = 112;
 
-  reveals.forEach((el, i) => setTimeout(() => el.classList.add("visible"), i * INFO_STAGGER));
-
-  const totalMs = Math.max(0, reveals.length - 1) * INFO_STAGGER + 200;
-  infoRevealTimer = setTimeout(() => {
-    setLoading("infoReveal", false);
-    infoRevealTimer = null;
-  }, totalMs);
-
+  // Attach hover listeners immediately (no visual impact; just readiness)
   const setSideHover = (side) => {
     const b = document.body;
     if (side === "left") {
@@ -930,7 +929,23 @@ function startInfoAnimations() {
     el.addEventListener("mouseleave", clearSideHover);
   });
 
+  // Ensure main is present (opacity is handled by navigateTo too)
   document.querySelector("main")?.style && (document.querySelector("main").style.opacity = "1");
+
+  // NEW: micro pause before any reveal begins (matches index’s “prelude” feel)
+  infoPreludeTimer = setTimeout(() => {
+    reveals.forEach((el, i) => {
+      setTimeout(() => el.classList.add("visible"), i * INFO_STAGGER);
+    });
+
+    const totalMs = INFO_PRELUDE_DELAY + Math.max(0, reveals.length - 1) * INFO_STAGGER + 200;
+    infoRevealTimer = setTimeout(() => {
+      setLoading("infoReveal", false);
+      infoRevealTimer = null;
+    }, Math.max(0, totalMs - INFO_PRELUDE_DELAY));
+
+    infoPreludeTimer = null;
+  }, INFO_PRELUDE_DELAY);
 }
 
 /* ========= Init per page ========= */
@@ -951,9 +966,14 @@ function initPageContent() {
 
   setHoveredWrapperForLoading(null);
   setLoading("infoReveal", false);
+
   if (infoRevealTimer) {
     clearTimeout(infoRevealTimer);
     infoRevealTimer = null;
+  }
+  if (infoPreludeTimer) {
+    clearTimeout(infoPreludeTimer);
+    infoPreludeTimer = null;
   }
 
   const isInfo = document.body.classList.contains("info-page");
