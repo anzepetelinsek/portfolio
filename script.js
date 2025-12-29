@@ -106,7 +106,7 @@ const REVEAL_ROOT_MARGIN = "0px";
 const REVEAL_THRESHOLD = 0.02;
 
 // Pixel timing (FASTER DEFAULTS)
-const PIXEL_STEPS = [88, 60, 40, 26, 16, 10, 6, 3, 1];
+const PIXEL_STEPS = [88, 44, 1];
 const PIXEL_HOLD_MS = 80; // was 220
 const PIXEL_DURATION = 650; // was 1100
 
